@@ -1,0 +1,6 @@
+APP_NAME="Sistema de Acesso Remoto"
+APP_URL="http://localhost:8092"
+DB_HOST="localhost"
+DB_NAME="remote_access_db"
+DB_USER="root"
+DB_PASS="root"

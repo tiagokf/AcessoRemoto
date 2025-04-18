@@ -46,8 +46,27 @@ $sql = "SELECT DATE(data_acesso) as data, COUNT(*) as total
 $result = dbQuery($sql);
 $acessos_por_dia = dbFetchAll($result);
 
+// Preparar arrays para o gráfico de acessos recentes
+$datas = [];
+$totais = [];
+
+// Preencher com zeros para os dias sem registros
+for ($i = 6; $i >= 0; $i--) {
+    $data = date('Y-m-d', strtotime("-$i days"));
+    $datas[] = date('d/m', strtotime($data));
+    $totais[] = 0;
+    
+    // Verificar se há registros para esta data
+    foreach ($acessos_por_dia as $acesso) {
+        if ($acesso['data'] == $data) {
+            $totais[count($totais) - 1] = intval($acesso['total']);
+            break;
+        }
+    }
+}
+
 // Últimas conexões acessadas
-$sql = "SELECT c.id, c.cliente, c.tipo_acesso_remoto, MAX(a.data_acesso) as ultimo_acesso
+$sql = "SELECT c.id, c.cliente, c.tipo_acesso_remoto, c.id_acesso_remoto, c.senha_acesso_remoto, c.observacoes, MAX(a.data_acesso) as ultimo_acesso
         FROM conexoes c
         LEFT JOIN acessos a ON c.id = a.id_conexao
         GROUP BY c.id
@@ -60,6 +79,21 @@ $ultimas_conexoes = dbFetchAll($result);
 $sql = "SELECT tipo_acesso_remoto, COUNT(*) as total FROM conexoes GROUP BY tipo_acesso_remoto";
 $result = dbQuery($sql);
 $tipos_acesso = dbFetchAll($result);
+
+// Preparar arrays para o gráfico de tipos de conexão
+$tipos = [];
+$quantidades = [];
+
+foreach ($tipos_acesso as $tipo) {
+    $tipos[] = $tipo['tipo_acesso_remoto'];
+    $quantidades[] = $tipo['total'];
+}
+
+// Se não houver dados, adicionar um placeholder
+if (empty($tipos)) {
+    $tipos[] = 'Sem dados';
+    $quantidades[] = 1;
+}
 ?>
 
 <!-- Conteúdo principal -->
@@ -71,47 +105,122 @@ $tipos_acesso = dbFetchAll($result);
             <div class="sub header">Visão geral do sistema</div>
         </div>
     </h1>
-    
+
+    <style>
+        .dashboard-stat {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .dashboard-stat:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .dashboard-stat .value {
+            font-size: 2.5em !important;
+            font-weight: bold !important;
+            line-height: 1.2;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .dashboard-stat .label {
+            font-size: 1.2em !important;
+            text-transform: uppercase;
+            opacity: 0.8;
+            text-align: center;
+        }
+
+        .dashboard-stat.blue {
+            background: linear-gradient(135deg, #e9f5ff 0%, #dcf0ff 100%);
+        }
+
+        .dashboard-stat.blue .value {
+            color: #2185d0;
+        }
+
+        .dashboard-stat.green {
+            background: linear-gradient(135deg, #e6f7ee 0%, #d8f2e3 100%);
+        }
+
+        .dashboard-stat.green .value {
+            color: #21ba45;
+        }
+
+        .dashboard-stat.orange {
+            background: linear-gradient(135deg, #fff0e6 0%, #ffead8 100%);
+        }
+
+        .dashboard-stat.orange .value {
+            color: #f2711c;
+        }
+
+        .dashboard-stat.purple {
+            background: linear-gradient(135deg, #f0e6ff 0%, #e8d8ff 100%);
+        }
+
+        .dashboard-stat.purple .value {
+            color: #6435c9;
+        }
+
+        .dashboard-stat .icon {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 2.5em;
+            opacity: 0.2;
+        }
+    </style>
+
     <!-- Cards com estatísticas em uma linha única -->
-    <div class="ui four statistics" style="display: flex; flex-wrap: nowrap; margin-bottom: 30px;">
-        <div class="statistic">
+    <div class="ui four statistics" style="display: flex; flex-wrap: wrap; margin-bottom: 30px;">
+        <div class="statistic dashboard-stat blue">
+            <i class="server icon"></i>
             <div class="value">
                 <?php echo $total_conexoes; ?>
             </div>
             <div class="label">CONEXÕES</div>
         </div>
-        <div class="statistic">
+        <div class="statistic dashboard-stat green">
+            <i class="exchange icon"></i>
             <div class="value">
                 <?php echo $total_acessos; ?>
             </div>
             <div class="label">ACESSOS</div>
         </div>
-        <div class="statistic">
+        <div class="statistic dashboard-stat orange">
+            <i class="calendar check icon"></i>
             <div class="value">
                 <?php echo $acessos_hoje; ?>
             </div>
             <div class="label">ACESSOS HOJE</div>
         </div>
-        <div class="statistic">
+        <div class="statistic dashboard-stat purple">
+            <i class="users icon"></i>
             <div class="value">
                 <?php echo $total_usuarios; ?>
             </div>
             <div class="label">USUÁRIOS</div>
         </div>
     </div>
-    
+
     <div class="ui hidden divider"></div>
-    
+
     <!-- Gráficos e tabelas -->
     <div class="ui grid">
         <!-- Gráfico de acessos recentes -->
         <div class="eight wide column">
-            <div class="ui segment">
+            <div class="ui segment" style="height: 400px;">
                 <h3 class="ui header">
                     <i class="chart line icon"></i>
                     <div class="content">Acessos Recentes</div>
                 </h3>
-                <div class="chart-container">
+                <div class="chart-container" style="height: 320px; position: relative;">
                     <canvas id="acessosChart"></canvas>
                 </div>
             </div>
@@ -119,17 +228,17 @@ $tipos_acesso = dbFetchAll($result);
         
         <!-- Gráfico de tipos de conexão -->
         <div class="eight wide column">
-            <div class="ui segment">
+            <div class="ui segment" style="height: 400px;">
                 <h3 class="ui header">
-                    <i class="pie chart icon"></i>
+                    <i class="chart bar icon"></i>
                     <div class="content">Tipos de Conexão</div>
                 </h3>
-                <div class="chart-container">
+                <div class="chart-container" style="height: 320px; position: relative;">
                     <canvas id="tiposChart"></canvas>
                 </div>
             </div>
         </div>
-        
+
         <!-- Tabela de conexões recentes -->
         <div class="sixteen wide column">
             <div class="ui segment">
@@ -177,9 +286,16 @@ $tipos_acesso = dbFetchAll($result);
                                         <?php endif; ?>
                                     </td>
                                     <td class="center aligned">
-                                        <a href="<?php echo SITE_URL; ?>/modules/conexoes/ver.php?id=<?php echo $conexao['id']; ?>" class="ui mini primary button">
+                                        <button onclick="visualizarConexao(<?php echo $conexao['id']; ?>, 
+                                            '<?php echo htmlspecialchars($conexao['cliente']); ?>', 
+                                            '<?php echo htmlspecialchars($conexao['tipo_acesso_remoto']); ?>', 
+                                            '<?php echo htmlspecialchars($conexao['id_acesso_remoto']); ?>', 
+                                            '<?php echo htmlspecialchars($conexao['senha_acesso_remoto'] ?? ''); ?>', 
+                                            '<?php echo htmlspecialchars(addslashes($conexao['observacoes'] ?? '')); ?>', 
+                                            '<?php echo !empty($conexao['ultimo_acesso']) ? date('d/m/Y H:i', strtotime($conexao['ultimo_acesso'])) : 'Nunca acessada'; ?>')" 
+                                            class="ui mini primary button">
                                             <i class="eye icon"></i> Visualizar
-                                        </a>
+                                        </button>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -199,7 +315,69 @@ $tipos_acesso = dbFetchAll($result);
             </div>
         </div>
     </div>
-    
+
+    <!-- Modal para Visualizar Conexão -->
+    <div class="ui small modal" id="modal-visualizar">
+        <div class="header">
+            <i class="eye icon"></i> Detalhes da Conexão
+        </div>
+        <div class="content">
+            <div class="ui form">
+                <div class="field">
+                    <label>Cliente</label>
+                    <div class="ui disabled input">
+                        <input type="text" id="visualizar-cliente" readonly>
+                    </div>
+                </div>
+                
+                <div class="field">
+                    <label>Tipo de Acesso</label>
+                    <div class="ui disabled input">
+                        <input type="text" id="visualizar-tipo" readonly>
+                    </div>
+                </div>
+                
+                <div class="field">
+                    <label>ID de Acesso</label>
+                    <div class="ui action input">
+                        <input type="text" id="visualizar-id-acesso" readonly>
+                        <button class="ui icon button" onclick="copiarParaClipboard('visualizar-id-acesso')">
+                            <i class="copy icon"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="field" id="campo-senha-visualizar">
+                    <label>Senha de Acesso</label>
+                    <div class="ui action input">
+                        <input type="text" id="visualizar-senha" readonly>
+                        <button class="ui icon button" onclick="copiarParaClipboard('visualizar-senha')">
+                            <i class="copy icon"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="field">
+                    <label>Último Acesso</label>
+                    <div class="ui disabled input">
+                        <input type="text" id="visualizar-ultimo-acesso" readonly>
+                    </div>
+                </div>
+                
+                <div class="field">
+                    <label>Observações</label>
+                    <textarea id="visualizar-observacoes" readonly style="height: 80px; resize: none;"></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="actions">
+            <a href="#" class="ui blue button" id="btn-acessar-conexao">
+                <i class="external link icon"></i> Acessar Conexão
+            </a>
+            <div class="ui approve primary button">Fechar</div>
+        </div>
+    </div>
+
     <!-- Script para gerar os gráficos -->
     <script>
         // Ajustar configurações padrão do Chart.js
@@ -308,48 +486,28 @@ $tipos_acesso = dbFetchAll($result);
         // 2. Gráfico de tipos de conexão
         const ctxTipos = document.getElementById('tiposChart').getContext('2d');
         
-        <?php
-        // Preparar arrays para o gráfico de tipos
-        $tipos = [];
-        $quantidades = [];
-        
-        foreach ($tipos_acesso as $tipo) {
-            $tipos[] = $tipo['tipo_acesso_remoto'];
-            $quantidades[] = $tipo['total'];
-        }
-        
-        // Se não houver dados, adicionar um placeholder
-        if (empty($tipos)) {
-            $tipos[] = 'Sem dados';
-            $quantidades[] = 1;
-        }
-        ?>
-        
         const dataTipos = {
             labels: <?php echo json_encode($tipos); ?>,
             datasets: [{
+                label: 'Quantidade',
                 data: <?php echo json_encode($quantidades); ?>,
                 backgroundColor: chartColors,
-                borderWidth: 0,
-                hoverOffset: 15
+                borderColor: chartColors.map(color => color.replace('0.8', '1')),
+                borderWidth: 1,
+                barPercentage: 0.6,
+                categoryPercentage: 0.8
             }]
         };
         
         const tiposChart = new Chart(ctxTipos, {
-            type: 'doughnut',
+            type: 'bar',
             data: dataTipos,
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                cutout: '60%',
                 plugins: {
                     legend: {
-                        position: 'right',
-                        labels: {
-                            padding: 15,
-                            usePointStyle: true,
-                            pointStyle: 'circle'
-                        }
+                        display: false
                     },
                     tooltip: {
                         backgroundColor: 'rgba(0, 0, 0, 0.7)',
@@ -364,25 +522,72 @@ $tipos_acesso = dbFetchAll($result);
                         cornerRadius: 4,
                         callbacks: {
                             label: function(context) {
-                                const label = context.label || '';
+                                const label = context.dataset.label || '';
                                 const value = context.raw || 0;
-                                const total = context.dataset.data.reduce((acc, val) => acc + val, 0);
-                                const percentage = Math.round((value / total) * 100);
-                                return `${label}: ${value} (${percentage}%)`;
+                                return `${label}: ${value}`;
                             }
                         }
                     }
                 },
-                animation: {
-                    animateScale: true,
-                    animateRotate: true
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        },
+                        ticks: {
+                            precision: 0
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        }
+                    }
                 }
             }
         });
+
+        function visualizarConexao(id, cliente, tipo, idAcesso, senha, observacoes, ultimoAcesso) {
+            // Preencher os campos do modal
+            $('#visualizar-cliente').val(cliente);
+            $('#visualizar-tipo').val(tipo);
+            $('#visualizar-id-acesso').val(idAcesso);
+            $('#visualizar-senha').val(senha);
+            $('#visualizar-ultimo-acesso').val(ultimoAcesso);
+            $('#visualizar-observacoes').val(observacoes);
+            
+            // Configurar o botão de acessar
+            $('#btn-acessar-conexao').attr('href', '<?php echo SITE_URL; ?>/modules/conexoes/acessar.php?id=' + id);
+            
+            // Exibir/ocultar campo de senha
+            if (senha) {
+                $('#campo-senha-visualizar').show();
+            } else {
+                $('#campo-senha-visualizar').hide();
+            }
+            
+            // Exibir o modal
+            $('#modal-visualizar').modal('show');
+        }
+        
+        function copiarParaClipboard(elementId) {
+            const elemento = document.getElementById(elementId);
+            elemento.select();
+            document.execCommand('copy');
+            
+            $('body').toast({
+                class: 'success',
+                message: 'Copiado para a área de transferência',
+                showProgress: 'bottom',
+                displayTime: 2000
+            });
+        }
     </script>
 </div>
 
 <?php
 // Incluir rodapé
 include 'includes/footer.php';
+?>
 ?>

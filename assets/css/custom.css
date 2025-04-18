@@ -1,0 +1,409 @@
+/* assets/css/custom.css */
+/* Estilos personalizados aprimorados para o Sistema de Acesso Remoto */
+
+/* Variáveis de cores */
+:root {
+    --primary-color: #2185d0;
+    --primary-dark: #1a69a4;
+    --secondary-color: #21ba45;
+    --danger-color: #db2828;
+    --warning-color: #fbbd08;
+    --dark-bg: #1b1c1d;
+    --dark-text: #333333;
+    --light-text: #ffffff;
+    --light-bg: #f9fafb;
+    --border-color: #e0e0e0;
+    --hover-bg: #f5f5f5;
+}
+
+/* Estilos gerais */
+body {
+    background-color: var(--light-bg);
+    font-family: 'Lato', 'Helvetica Neue', Arial, sans-serif;
+    color: var(--dark-text);
+    margin: 0;
+    padding: 0;
+}
+
+/* Estilização da barra superior */
+.ui.top.fixed.menu {
+    background-color: var(--light-bg);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    height: 60px;
+    padding: 0 20px;
+    z-index: 1000;
+}
+
+.ui.top.fixed.menu .right.menu .item {
+    font-weight: 500;
+}
+
+/* Estilização da sidebar */
+.sidebar {
+    background-color: var(--dark-bg);
+    width: 250px;
+    height: 100%;
+    position: fixed;
+    top: 0;
+    left: 0;
+    overflow-y: auto;
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+    z-index: 999;
+    transition: all 0.3s ease;
+}
+
+.sidebar .logo-container {
+    background-color: var(--primary-color);
+    padding: 20px 15px;
+    text-align: center;
+    color: var(--light-text);
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sidebar .logo-container h2 {
+    margin: 0;
+    font-size: 1.4em;
+    white-space: nowrap;
+}
+
+.sidebar .item {
+    padding: 15px 20px;
+    color: rgba(255, 255, 255, 0.7);
+    display: flex;
+    align-items: center;
+    border-left: 3px solid transparent;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.sidebar .item i {
+    margin-right: 10px;
+    font-size: 1.2em;
+    width: 20px;
+    text-align: center;
+}
+
+.sidebar .item:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: var(--light-text);
+    border-left-color: rgba(255, 255, 255, 0.3);
+}
+
+.sidebar .item.active {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: var(--light-text);
+    border-left-color: var(--primary-color);
+    font-weight: 500;
+}
+
+.sidebar .user-info {
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    padding: 15px;
+    background-color: rgba(0, 0, 0, 0.2);
+    color: var(--light-text);
+}
+
+/* Estilização da área de conteúdo principal */
+.main-content {
+    margin-left: 250px;
+    padding: 80px 30px 40px;
+    min-height: calc(100vh - 60px);
+    transition: all 0.3s ease;
+}
+
+.main-content h1.ui.header {
+    margin-bottom: 30px;
+    color: var(--dark-text);
+    display: flex;
+    align-items: center;
+}
+
+.main-content h1.ui.header i {
+    font-size: 1.4em;
+    margin-right: 15px;
+    color: var(--primary-color);
+}
+
+.main-content .sub.header {
+    margin-top: 5px;
+    color: #777777;
+    font-weight: 400;
+}
+
+/* Cards de estatísticas */
+.ui.statistics {
+    margin-top: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 15px;
+}
+
+.ui.statistic {
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    text-align: center;
+    flex: 1;
+    min-width: 180px;
+    transition: all 0.3s ease;
+    margin: 0;
+}
+
+.ui.statistic:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.ui.statistic .value {
+    color: var(--primary-color);
+    font-size: 3em !important;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 10px;
+}
+
+.ui.statistic .label {
+    color: #888888;
+    font-size: 1em;
+    font-weight: 500;
+    text-transform: uppercase;
+}
+
+/* Estilização de segmentos e cartões */
+.ui.segment {
+    border: none;
+    box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
+    border-radius: 8px;
+    padding: 25px;
+    margin-bottom: 30px;
+}
+
+.ui.segment h3.ui.header {
+    color: var(--dark-text);
+    font-weight: 500;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* Estilização de tabelas */
+.ui.table {
+    border: none;
+    box-shadow: none;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.ui.table thead th {
+    background-color: #f8f9fa;
+    color: var(--dark-text);
+    font-weight: 500;
+    padding: 12px 15px;
+    border-top: none;
+}
+
+.ui.table tbody tr td {
+    padding: 12px 15px;
+    border-top: 1px solid var(--border-color);
+}
+
+.ui.table tbody tr:hover {
+    background-color: var(--hover-bg);
+}
+
+.ui.celled.table tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+/* Estilização de formulários */
+.ui.form .field label {
+    color: var(--dark-text);
+    font-weight: 500;
+    margin-bottom: 8px;
+}
+
+.ui.form .field input, 
+.ui.form .field select, 
+.ui.form .field textarea {
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 12px 15px;
+    box-shadow: none;
+    transition: all 0.3s ease;
+}
+
+.ui.form .field input:focus, 
+.ui.form .field select:focus, 
+.ui.form .field textarea:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 1px var(--primary-color);
+}
+
+/* Botões */
+.ui.button {
+    border-radius: 6px;
+    font-weight: 500;
+    padding: 12px 20px;
+    transition: all 0.3s ease;
+}
+
+.ui.primary.button {
+    background-color: var(--primary-color);
+}
+
+.ui.primary.button:hover {
+    background-color: var(--primary-dark);
+}
+
+.ui.green.button {
+    background-color: var(--secondary-color);
+}
+
+.ui.red.button {
+    background-color: var(--danger-color);
+}
+
+.ui.buttons {
+    box-shadow: none;
+}
+
+/* Estilização da página de login */
+.login-container {
+    max-width: 450px;
+    margin: 100px auto;
+    padding: 0;
+}
+
+.login-container .logo {
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.login-container .segment {
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 5px 25px rgba(0, 0, 0, 0.1);
+    border: none;
+}
+
+.login-container .ui.dividing.header {
+    text-align: center;
+    padding-bottom: 15px;
+    margin-bottom: 25px;
+    font-weight: 500;
+}
+
+.login-container .ui.input {
+    margin-bottom: 20px;
+}
+
+.login-container .ui.fluid.button {
+    margin-top: 15px;
+    padding: 12px;
+}
+
+/* Mensagens de alerta */
+.ui.message {
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    border-radius: 8px;
+    padding: 15px 20px;
+}
+
+/* Gráficos */
+canvas {
+    max-width: 100%;
+    height: auto !important;
+}
+
+/* Responsividade */
+@media only screen and (max-width: 768px) {
+    .sidebar {
+        width: 60px;
+        overflow: visible;
+    }
+    
+    .sidebar .logo-container {
+        padding: 15px 0;
+    }
+    
+    .sidebar .logo-container h2 {
+        display: none;
+    }
+    
+    .sidebar .item span {
+        display: none;
+    }
+    
+    .sidebar .item i {
+        margin-right: 0;
+        font-size: 1.4em;
+    }
+    
+    .sidebar .user-info {
+        display: none;
+    }
+    
+    .main-content {
+        margin-left: 60px;
+        padding: 70px 15px 30px;
+    }
+    
+    .ui.top.fixed.menu {
+        margin-left: 60px;
+        width: calc(100% - 60px);
+    }
+    
+    .ui.statistics {
+        flex-direction: column;
+    }
+    
+    .ui.statistic {
+        width: 100%;
+    }
+}
+
+/* Ajustes para telas extra pequenas */
+@media only screen and (max-width: 480px) {
+    .ui.grid {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+    }
+    
+    .column {
+        padding: 10px 0 !important;
+    }
+    
+    .ui.table {
+        font-size: 0.9em;
+    }
+}
+
+/* Animações e transições */
+.fade-in {
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Customizações específicas para a interface */
+#dashboard-page {
+    animation: fadeIn 0.5s ease-in;
+}
+
+/* Estilos para os gráficos */
+.chart-container {
+    position: relative;
+    width: 100%;
+    height: 300px;
+}

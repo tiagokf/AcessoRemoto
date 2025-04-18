@@ -1,0 +1,45 @@
+remote-access-system/
+│
+├── assets/
+│   ├── css/
+│   │   └── semantic.min.css
+│   ├── js/
+│   │   ├── jquery.min.js
+│   │   └── semantic.min.js
+│   └── images/
+│
+├── config/
+│   ├── config.php
+│   └── database.php
+│
+├── includes/
+│   ├── header.php
+│   ├── sidebar.php
+│   ├── footer.php
+│   └── functions.php
+│
+├── modules/
+│   ├── dashboard/
+│   │   ├── dashboard.php
+│   │   └── metrics.php
+│   ├── usuarios/
+│   │   ├── listar.php
+│   │   ├── adicionar.php
+│   │   ├── editar.php
+│   │   └── excluir.php
+│   ├── conexoes/
+│   │   ├── listar.php
+│   │   ├── adicionar.php
+│   │   ├── editar.php
+│   │   └── excluir.php
+│   ├── acessos/
+│   │   └── listar.php
+│   └── relatorios/
+│       └── relatorios.php
+│
+├── auth/
+│   ├── login.php
+│   ├── logout.php
+│   └── auth.php
+│
+└── index.php

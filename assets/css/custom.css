@@ -1,5 +1,5 @@
 /* assets/css/custom.css */
-/* Estilos personalizados aprimorados para o Sistema de Acesso Remoto */
+/* Estilos personalizados melhorados para o Sistema de Acesso Remoto */
 
 /* Variáveis de cores */
 :root {
@@ -11,7 +11,7 @@
     --dark-bg: #1b1c1d;
     --dark-text: #333333;
     --light-text: #ffffff;
-    --light-bg: #f9fafb;
+    --light-bg: #f5f5f5;
     --border-color: #e0e0e0;
     --hover-bg: #f5f5f5;
 }
@@ -25,20 +25,41 @@ body {
     padding: 0;
 }
 
-/* Estilização da barra superior */
+/* Tema Dark para Header */
 .ui.top.fixed.menu {
-    background-color: var(--light-bg);
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    background-color: var(--dark-bg);
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3);
     height: 60px;
-    padding: 0 20px;
+    padding: 0;
+    border: none;
     z-index: 1000;
 }
 
-.ui.top.fixed.menu .right.menu .item {
-    font-weight: 500;
+.ui.top.fixed.menu .item {
+    color: var(--light-text);
 }
 
-/* Estilização da sidebar */
+.ui.top.fixed.menu .right.menu .item {
+    color: var(--light-text);
+    font-weight: 400;
+    padding: 0 15px;
+}
+
+.header-logo-container {
+    display: flex;
+    align-items: center;
+    padding: 0 15px;
+    height: 60px;
+    background-color: rgba(0, 0, 0, 0.2);
+}
+
+.header-logo {
+    height: 40px;
+    max-width: 100%;
+    object-fit: contain;
+}
+
+/* Tema Dark para Sidebar */
 .sidebar {
     background-color: var(--dark-bg);
     width: 250px;
@@ -47,26 +68,20 @@ body {
     top: 0;
     left: 0;
     overflow-y: auto;
-    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
-    z-index: 999;
-    transition: all 0.3s ease;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.2);
+    z-index: 900;
+    padding-top: 60px; /* Espaço para o header fixo */
 }
 
 .sidebar .logo-container {
-    background-color: var(--primary-color);
     padding: 20px 15px;
     text-align: center;
-    color: var(--light-text);
-    height: 60px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: none; /* Escondido porque temos logo no header */
 }
 
-.sidebar .logo-container h2 {
-    margin: 0;
-    font-size: 1.4em;
-    white-space: nowrap;
+.sidebar-logo {
+    height: 50px;
+    max-width: 100%;
 }
 
 .sidebar .item {
@@ -74,7 +89,7 @@ body {
     color: rgba(255, 255, 255, 0.7);
     display: flex;
     align-items: center;
-    border-left: 3px solid transparent;
+    border-left: 4px solid transparent;
     transition: all 0.2s ease;
     cursor: pointer;
 }
@@ -88,14 +103,14 @@ body {
 
 .sidebar .item:hover {
     background-color: rgba(255, 255, 255, 0.05);
-    color: var(--light-text);
-    border-left-color: rgba(255, 255, 255, 0.3);
+    color: white;
+    border-left-color: rgba(33, 133, 208, 0.5);
 }
 
 .sidebar .item.active {
-    background-color: rgba(255, 255, 255, 0.1);
-    color: var(--light-text);
-    border-left-color: var(--primary-color);
+    background-color: rgba(33, 133, 208, 0.15);
+    color: white;
+    border-left-color: #2185d0;
     font-weight: 500;
 }
 
@@ -106,19 +121,45 @@ body {
     width: 100%;
     padding: 15px;
     background-color: rgba(0, 0, 0, 0.2);
-    color: var(--light-text);
+}
+
+.sidebar .user-profile {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.sidebar .user-profile i {
+    font-size: 2.5em;
+    margin-right: 10px;
+    color: #2185d0;
+}
+
+.sidebar .user-details {
+    flex: 1;
+}
+
+.sidebar .user-name {
+    color: white;
+    font-weight: 500;
+    margin-bottom: 3px;
+}
+
+.sidebar .user-role {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.85em;
 }
 
 /* Estilização da área de conteúdo principal */
 .main-content {
     margin-left: 250px;
-    padding: 80px 30px 40px;
+    padding: 80px 25px 40px;
     min-height: calc(100vh - 60px);
-    transition: all 0.3s ease;
+    transition: margin-left 0.3s ease;
 }
 
 .main-content h1.ui.header {
-    margin-bottom: 30px;
+    margin-bottom: 25px;
     color: var(--dark-text);
     display: flex;
     align-items: center;
@@ -136,25 +177,34 @@ body {
     font-weight: 400;
 }
 
-/* Cards de estatísticas */
+/* Cards de estatísticas em linha */
 .ui.statistics {
-    margin-top: 20px;
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: row;
+    flex-wrap: nowrap;
     justify-content: space-between;
-    gap: 15px;
+    margin-top: 20px;
+    margin-bottom: 30px;
+    width: 100%;
 }
 
 .ui.statistic {
-    background-color: #ffffff;
+    margin: 0 10px !important;
+    flex: 1;
+    background-color: white;
     padding: 20px;
     border-radius: 8px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
     text-align: center;
-    flex: 1;
-    min-width: 180px;
     transition: all 0.3s ease;
-    margin: 0;
+}
+
+.ui.statistic:first-child {
+    margin-left: 0 !important;
+}
+
+.ui.statistic:last-child {
+    margin-right: 0 !important;
 }
 
 .ui.statistic:hover {
@@ -172,7 +222,7 @@ body {
 
 .ui.statistic .label {
     color: #888888;
-    font-size: 1em;
+    font-size: 0.9em;
     font-weight: 500;
     text-transform: uppercase;
 }
@@ -221,6 +271,29 @@ body {
 
 .ui.celled.table tr:nth-child(even) {
     background-color: #f9f9f9;
+}
+
+/* Botões de ação na listagem */
+.ui.table .ui.mini.buttons {
+    display: flex;
+}
+
+.ui.table .ui.button {
+    padding: 8px 12px;
+    font-size: 0.85em;
+    margin: 0 2px;
+}
+
+.ui.table .ui.blue.button {
+    background-color: var(--primary-color);
+}
+
+.ui.table .ui.green.button {
+    background-color: var(--secondary-color);
+}
+
+.ui.table .ui.red.button {
+    background-color: var(--danger-color);
 }
 
 /* Estilização de formulários */
@@ -275,41 +348,6 @@ body {
     box-shadow: none;
 }
 
-/* Estilização da página de login */
-.login-container {
-    max-width: 450px;
-    margin: 100px auto;
-    padding: 0;
-}
-
-.login-container .logo {
-    margin-bottom: 30px;
-    text-align: center;
-}
-
-.login-container .segment {
-    padding: 30px;
-    border-radius: 8px;
-    box-shadow: 0 5px 25px rgba(0, 0, 0, 0.1);
-    border: none;
-}
-
-.login-container .ui.dividing.header {
-    text-align: center;
-    padding-bottom: 15px;
-    margin-bottom: 25px;
-    font-weight: 500;
-}
-
-.login-container .ui.input {
-    margin-bottom: 20px;
-}
-
-.login-container .ui.fluid.button {
-    margin-top: 15px;
-    padding: 12px;
-}
-
 /* Mensagens de alerta */
 .ui.message {
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
@@ -317,25 +355,10 @@ body {
     padding: 15px 20px;
 }
 
-/* Gráficos */
-canvas {
-    max-width: 100%;
-    height: auto !important;
-}
-
 /* Responsividade */
 @media only screen and (max-width: 768px) {
     .sidebar {
         width: 60px;
-        overflow: visible;
-    }
-    
-    .sidebar .logo-container {
-        padding: 15px 0;
-    }
-    
-    .sidebar .logo-container h2 {
-        display: none;
     }
     
     .sidebar .item span {
@@ -362,28 +385,254 @@ canvas {
     }
     
     .ui.statistics {
-        flex-direction: column;
+        flex-wrap: wrap;
     }
     
     .ui.statistic {
-        width: 100%;
+        flex: 1 0 45%;
+        margin-bottom: 15px !important;
     }
 }
 
-/* Ajustes para telas extra pequenas */
 @media only screen and (max-width: 480px) {
-    .ui.grid {
-        margin-left: 0 !important;
-        margin-right: 0 !important;
+    .ui.statistic {
+        flex: 1 0 100%;
     }
     
-    .column {
-        padding: 10px 0 !important;
+    .ui.table .ui.mini.buttons {
+        flex-direction: column;
     }
     
-    .ui.table {
-        font-size: 0.9em;
+    .ui.table .ui.button {
+        margin: 2px 0;
     }
+}
+
+/* Estilização para o modal de acesso */
+.ui.modal .header {
+    background-color: var(--primary-color);
+    color: white;
+    border-bottom: none;
+    font-weight: 500;
+    padding: 15px 20px;
+    border-radius: 6px 6px 0 0;
+}
+
+.ui.modal .header i {
+    margin-right: 10px;
+}
+
+.ui.modal .content {
+    padding: 20px;
+}
+
+.ui.modal .actions {
+    background-color: #f9f9f9;
+    padding: 15px 20px;
+    border-top: 1px solid #eee;
+}
+
+.ui.modal .ui.form .field {
+    margin-bottom: 15px;
+}
+
+.ui.modal .ui.form .ui.action.input {
+    width: 100%;
+}
+
+.ui.modal .ui.info.message {
+    background-color: #f8ffff;
+    box-shadow: 0 0 0 1px #a9d5de inset, 0 0 0 0 transparent;
+    margin-top: 15px;
+}
+
+.ui.modal .ui.info.message .header {
+    background-color: transparent;
+    color: var(--dark-text);
+    padding: 0;
+    margin-bottom: 10px;
+    font-weight: bold;
+}
+
+/* Toast de feedback */
+.ui.toast-container {
+    position: fixed;
+    z-index: 9999;
+    top: 15px;
+    right: 15px;
+    max-width: 320px;
+}
+
+.ui.toast {
+    background-color: #2185d0;
+    color: white;
+    padding: 15px 20px;
+    border-radius: 6px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    animation: slideInRight 0.3s ease, fadeOut 0.5s ease 2s forwards;
+}
+
+.ui.toast.success {
+    background-color: #21ba45;
+}
+
+.ui.toast i {
+    margin-right: 10px;
+    font-size: 1.2em;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
+        display: none;
+    }
+}
+
+/* Melhorias nas listas de conexões */
+.connection-type-label {
+    border-radius: 4px;
+    color: white;
+    padding: 6px 10px;
+    font-size: 0.85em;
+    display: inline-block;
+    min-width: 90px;
+    text-align: center;
+}
+
+.connection-type-anydesk {
+    background-color: #ef443b;
+}
+
+.connection-type-teamviewer {
+    background-color: #1a68d6;
+}
+
+.connection-type-rdp {
+    background-color: #2c82c9;
+}
+
+.connection-type-vpn {
+    background-color: #27ae60;
+}
+
+.connection-type-ssh {
+    background-color: #333333;
+}
+
+.connection-type-rustdesk {
+    background-color: #4d4d4d;
+}
+
+.connection-type-supremo {
+    background-color: #f39c12;
+}
+
+.connection-type-other {
+    background-color: #7f8c8d;
+}
+
+/* Botão de nova conexão */
+.new-connection-button {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 6px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    transition: all 0.3s ease;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.new-connection-button:hover {
+    background-color: var(--primary-dark);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.new-connection-button i {
+    margin-right: 8px;
+}
+
+/* Barra de pesquisa estilizada */
+.search-container {
+    position: relative;
+}
+
+.search-input {
+    width: 100%;
+    padding: 12px 15px 12px 40px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 14px;
+    transition: all 0.3s ease;
+}
+
+.search-input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 1px var(--primary-color);
+}
+
+.search-icon {
+    position: absolute;
+    left: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #888;
+}
+
+.search-button {
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 12px;
+    cursor: pointer;
+}
+
+/* Efeitos de foco para acessibilidade */
+:focus {
+    outline: 2px solid rgba(33, 133, 208, 0.5);
+    outline-offset: 2px;
+}
+
+/* Efeitos de hover para elementos interativos */
+.interactive-item {
+    transition: all 0.2s ease;
+}
+
+.interactive-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+/* Ícones para tipos de conexão */
+.connection-icon {
+    margin-right: 8px;
+    font-size: 1.2em;
 }
 
 /* Animações e transições */
@@ -391,19 +640,184 @@ canvas {
     animation: fadeIn 0.5s ease-in;
 }
 
+.slide-up {
+    animation: slideUp 0.5s ease-out;
+}
+
 @keyframes fadeIn {
     from { opacity: 0; }
     to { opacity: 1; }
 }
 
-/* Customizações específicas para a interface */
-#dashboard-page {
-    animation: fadeIn 0.5s ease-in;
+@keyframes slideUp {
+    from { 
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to { 
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
-/* Estilos para os gráficos */
-.chart-container {
-    position: relative;
-    width: 100%;
-    height: 300px;
+/* Personalização da página de login */
+.login-container {
+    max-width: 450px;
+    margin: 100px auto;
+    padding: 0;
+    animation: fadeIn 0.8s ease-out;
+}
+
+.login-container .logo {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.login-container .segment {
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 5px 25px rgba(0, 0, 0, 0.1);
+    border: none;
+}
+
+.login-container .ui.dividing.header {
+    text-align: center;
+    padding-bottom: 15px;
+    margin-bottom: 25px;
+    font-weight: 500;
+}
+
+.login-container .ui.input {
+    margin-bottom: 20px;
+}
+
+.login-container .ui.fluid.button {
+    margin-top: 15px;
+    padding: 12px;
+}
+
+/* Estilo para conexões sem acesso recente */
+.no-recent-access {
+    color: #999;
+    font-style: italic;
+}
+
+/* Estilização para rótulos e badges */
+.ui.label {
+    border-radius: 4px;
+    font-weight: normal;
+    padding: 5px 8px;
+}
+
+.ui.label.primary {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.ui.label.secondary {
+    background-color: var(--secondary-color);
+    color: white;
+}
+
+.ui.label.red {
+    background-color: var(--danger-color);
+    color: white;
+}
+
+/* Estilização para tooltips */
+[data-tooltip]:before {
+    background-color: #333;
+    border-radius: 4px;
+    color: white;
+    font-size: 12px;
+    padding: 6px 10px;
+}
+
+/* Estilização para paginação */
+.ui.pagination.menu {
+    box-shadow: none;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.ui.pagination.menu .item {
+    padding: 10px 15px;
+    color: var(--dark-text);
+    border-right: 1px solid #e0e0e0;
+}
+
+.ui.pagination.menu .item:last-child {
+    border-right: none;
+}
+
+.ui.pagination.menu .active.item {
+    background-color: var(--primary-color);
+    color: white;
+    font-weight: bold;
+}
+
+.ui.pagination.menu .disabled.item {
+    color: #ccc;
+}
+
+/* Contador de registros na tabela */
+.records-counter {
+    font-size: 0.9em;
+    color: #777;
+    margin-top: 10px;
+}
+
+/* Indicadores de status */
+.status-indicator {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 5px;
+}
+
+.status-active {
+    background-color: var(--secondary-color);
+}
+
+.status-inactive {
+    background-color: #ccc;
+}
+
+.status-warning {
+    background-color: var(--warning-color);
+}
+
+.status-danger {
+    background-color: var(--danger-color);
+}
+
+/* Estilização para dropdowns */
+.ui.selection.dropdown {
+    border-radius: 6px;
+    padding: 12px 15px;
+}
+
+.ui.selection.dropdown:focus {
+    border-color: var(--primary-color);
+}
+
+.ui.selection.dropdown .menu {
+    border-radius: 6px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+/* Estilos para placeholders */
+::placeholder {
+    color: #aaa;
+    opacity: 1;
+}
+
+:-ms-input-placeholder {
+    color: #aaa;
+}
+
+::-ms-input-placeholder {
+    color: #aaa;
 }

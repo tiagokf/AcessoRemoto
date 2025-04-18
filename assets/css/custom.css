@@ -276,12 +276,21 @@ body {
 /* Botões de ação na listagem */
 .ui.table .ui.mini.buttons {
     display: flex;
+    gap: 5px;
+    justify-content: center;
 }
 
 .ui.table .ui.button {
     padding: 8px 12px;
     font-size: 0.85em;
-    margin: 0 2px;
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.ui.table .ui.button i {
+    margin-right: 5px;
 }
 
 .ui.table .ui.blue.button {

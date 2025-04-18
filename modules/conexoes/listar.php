@@ -59,7 +59,7 @@ $totalPaginas = ceil($totalRegistros / $limite);
 <!-- Conteúdo principal -->
 <div class="main-content">
     <h1 class="ui header">
-        <i class="server icon"></i>
+        <i class="fas fa-server"></i>
         <div class="content">
             Conexões Remotas
             <div class="sub header">Gerenciar conexões de acesso remoto</div>
@@ -72,7 +72,7 @@ $totalPaginas = ceil($totalRegistros / $limite);
     <div class="ui grid">
         <div class="eight wide column">
             <a href="adicionar.php" class="ui primary button">
-                <i class="plus icon"></i> Nova Conexão
+                <i class="fas fa-plus"></i> Nova Conexão
             </a>
         </div>
         <div class="eight wide column">
@@ -80,7 +80,7 @@ $totalPaginas = ceil($totalRegistros / $limite);
                 <div class="ui action input fluid">
                     <input type="text" name="busca" placeholder="Buscar conexões..." value="<?php echo htmlspecialchars($busca ?? ''); ?>">
                     <button class="ui icon button" type="submit">
-                        <i class="search icon"></i>
+                        <i class="fas fa-search"></i>
                     </button>
                 </div>
             </form>
@@ -113,7 +113,7 @@ $totalPaginas = ceil($totalRegistros / $limite);
                             $observacao = htmlspecialchars($conexao['observacoes'] ?? '');
                             echo (strlen($observacao) > 50) ? substr($observacao, 0, 50) . '...' : $observacao;
                         ?></td>
-                        <td class="center aligned collapsing">
+                        <td class="center aligned">
                             <div class="ui mini buttons">
                                 <button onclick="acessarConexao(<?php echo $conexao['id']; ?>, 
                                     '<?php echo htmlspecialchars($conexao['cliente'] ?? ''); ?>', 
@@ -121,14 +121,14 @@ $totalPaginas = ceil($totalRegistros / $limite);
                                     '<?php echo htmlspecialchars($conexao['id_acesso_remoto'] ?? ''); ?>', 
                                     '<?php echo htmlspecialchars($conexao['senha_acesso_remoto'] ?? ''); ?>')" 
                                     class="ui blue button">
-                                    <i class="external alternate icon"></i> Acessar
+                                    <i class="fas fa-external-link-alt"></i> Acessar
                                 </button>
                                 
                                 <a href="editar.php?id=<?php echo $conexao['id']; ?>" class="ui green button">
-                                    <i class="edit icon"></i> Editar
+                                    <i class="fas fa-edit"></i> Editar
                                 </a>
                                 <a href="javascript:void(0);" onclick="confirmarExclusao(<?php echo $conexao['id']; ?>)" class="ui red button">
-                                    <i class="trash icon"></i> Excluir
+                                    <i class="fas fa-trash"></i> Excluir
                                 </a>
                             </div>
                         </td>
@@ -147,10 +147,10 @@ $totalPaginas = ceil($totalRegistros / $limite);
                         <div class="ui right floated pagination menu">
                             <?php if ($pagina > 1): ?>
                                 <a class="item" href="?pagina=1<?php echo !empty($busca) ? '&busca=' . urlencode($busca) : ''; ?>">
-                                    <i class="angle double left icon"></i>
+                                    <i class="fas fa-angle-double-left"></i>
                                 </a>
                                 <a class="item" href="?pagina=<?php echo $pagina - 1; ?><?php echo !empty($busca) ? '&busca=' . urlencode($busca) : ''; ?>">
-                                    <i class="angle left icon"></i>
+                                    <i class="fas fa-angle-left"></i>
                                 </a>
                             <?php endif; ?>
                             
@@ -171,10 +171,10 @@ $totalPaginas = ceil($totalRegistros / $limite);
                             
                             <?php if ($pagina < $totalPaginas): ?>
                                 <a class="item" href="?pagina=<?php echo $pagina + 1; ?><?php echo !empty($busca) ? '&busca=' . urlencode($busca) : ''; ?>">
-                                    <i class="angle right icon"></i>
+                                    <i class="fas fa-angle-right"></i>
                                 </a>
                                 <a class="item" href="?pagina=<?php echo $totalPaginas; ?><?php echo !empty($busca) ? '&busca=' . urlencode($busca) : ''; ?>">
-                                    <i class="angle double right icon"></i>
+                                    <i class="fas fa-angle-double-right"></i>
                                 </a>
                             <?php endif; ?>
                         </div>
@@ -204,7 +204,7 @@ $totalPaginas = ceil($totalRegistros / $limite);
 <!-- Modal de acesso remoto -->
 <div class="ui small modal" id="modal-acesso">
     <div class="header">
-        <i class="external alternate icon"></i> Acessar Conexão Remota
+        <i class="fas fa-external-link-alt"></i> Acessar Conexão Remota
     </div>
     <div class="content">
         <div class="ui form">
@@ -227,7 +227,7 @@ $totalPaginas = ceil($totalRegistros / $limite);
                 <div class="ui action input">
                     <input type="text" id="modal-id-acesso" readonly>
                     <button class="ui icon button" onclick="copiarParaClipboard('modal-id-acesso')">
-                        <i class="copy icon"></i>
+                        <i class="fas fa-copy"></i>
                     </button>
                 </div>
             </div>
@@ -237,7 +237,7 @@ $totalPaginas = ceil($totalRegistros / $limite);
                 <div class="ui action input">
                     <input type="text" id="modal-senha" readonly>
                     <button class="ui icon button" onclick="copiarParaClipboard('modal-senha')">
-                        <i class="copy icon"></i>
+                        <i class="fas fa-copy"></i>
                     </button>
                 </div>
             </div>
@@ -250,7 +250,7 @@ $totalPaginas = ceil($totalRegistros / $limite);
                         <option value="RustDesk@2020">RustDesk@2020</option>
                     </select>
                     <button class="ui icon button" onclick="copiarSenhaPadrao()">
-                        <i class="copy icon"></i>
+                        <i class="fas fa-copy"></i>
                     </button>
                 </div>
             </div>
@@ -292,6 +292,14 @@ $totalPaginas = ceil($totalRegistros / $limite);
         } else {
             $('#campo-senha').hide();
             $('#campo-senha-padrao').show();
+            
+            // Selecionar senha padrão com base no tipo
+            if (tipo === 'RustDesk') {
+                $('#select-senha-padrao').val('RustDesk@2020');
+            } else {
+                $('#select-senha-padrao').val('SemSenha');
+            }
+            $('.ui.dropdown').dropdown('refresh');
         }
         
         // Registrar o acesso
@@ -310,7 +318,13 @@ $totalPaginas = ceil($totalRegistros / $limite);
         document.execCommand('copy');
         
         // Feedback visual
-        showCopyFeedback();
+        $('body')
+            .toast({
+                class: 'success',
+                message: 'Copiado para a área de transferência',
+                showProgress: 'bottom',
+                displayTime: 2000
+            });
     }
     
     function copiarSenhaPadrao() {
@@ -325,7 +339,7 @@ $totalPaginas = ceil($totalRegistros / $limite);
         $('body')
             .toast({
                 class: 'success',
-                message: 'Copiado para a área de transferência!',
+                message: 'Copiado para a área de transferência',
                 showProgress: 'bottom',
                 displayTime: 2000
             });

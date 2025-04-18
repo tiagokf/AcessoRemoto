@@ -22,8 +22,8 @@ if ($current_page != 'login.php') {
     <!-- Semantic UI CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/semantic-ui@2.4.2/dist/semantic.min.css">
     
-    <!-- Font Awesome para ícones adicionais -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Font Awesome para ícones -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     
     <!-- CSS Personalizado -->
     <link rel="stylesheet" href="<?php echo SITE_URL; ?>/assets/css/custom.css">
@@ -80,116 +80,21 @@ if ($current_page != 'login.php') {
             object-fit: contain;
         }
         
-        /* Ajustes para o dropdown no menu */
-        .ui.dropdown .menu {
-            background-color: #1b1c1d;
-            border: 1px solid #333;
-            box-shadow: 0 5px 10px rgba(0, 0, 0, 0.5);
-        }
-        
-        .ui.dropdown .menu .item {
-            color: #ffffff;
-            border-top: 1px solid rgba(255, 255, 255, 0.08);
-        }
-        
-        .ui.dropdown .menu .item:hover {
-            background-color: rgba(255, 255, 255, 0.1);
-        }
-        
-        .ui.dropdown .menu .divider {
-            margin: 0;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        /* Página de conteúdo principal */
+        /* Ajustes para o conteúdo principal */
         .main-content {
+            margin-left: 250px;
             padding-top: 80px;
-        }
-        
-        /* Ajuste para cards em uma linha */
-        .ui.statistics {
-            display: flex;
-            flex-wrap: nowrap;
-            margin-bottom: 30px;
-            width: 100%;
-        }
-        
-        .ui.statistic {
-            margin: 0 10px !important;
-            flex: 1;
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-        }
-        
-        .ui.statistic:first-child {
-            margin-left: 0 !important;
-        }
-        
-        .ui.statistic:last-child {
-            margin-right: 0 !important;
-        }
-        
-        /* Mensagem de bem-vindo no header */
-        .welcome-message {
-            display: flex;
-            align-items: center;
-            font-weight: 400;
-            color: rgba(255, 255, 255, 0.9);
-        }
-        
-        .welcome-message i {
-            font-size: 1.2em;
-            margin-right: 8px;
-            color: #2185d0;
-        }
-        
-        /* Botão de configurações com hover */
-        .settings-button {
-            background-color: transparent;
-            color: white;
-            border: none;
-            cursor: pointer;
-            padding: 8px 12px;
-            border-radius: 4px;
-            transition: background-color 0.2s;
-        }
-        
-        .settings-button:hover {
-            background-color: rgba(255, 255, 255, 0.1);
-        }
-        
-        /* Responsividade */
-        @media only screen and (max-width: 768px) {
-            .ui.statistics {
-                flex-wrap: wrap;
-            }
-            
-            .ui.statistic {
-                flex: 1 0 45%;
-                margin-bottom: 15px !important;
-            }
-            
-            .header-logo {
-                height: 35px;
-            }
-        }
-        
-        @media only screen and (max-width: 480px) {
-            .ui.statistic {
-                flex: 1 0 100%;
-            }
-            
-            .welcome-message span {
-                display: none;
-            }
+            padding-bottom: 40px;
+            padding-left: 25px;
+            padding-right: 25px;
+            min-height: calc(100vh - 60px);
+            transition: margin-left 0.3s ease;
         }
     </style>
 </head>
 <body>
     <?php if ($current_page != 'login.php'): ?>
-    <!-- Barra de navegação superior em tema dark -->
+    <!-- Barra de navegação superior -->
     <div class="ui top fixed menu">
         <!-- Logo no header -->
         <div class="header-logo-container">
@@ -197,22 +102,22 @@ if ($current_page != 'login.php') {
         </div>
         
         <div class="right menu">
-            <div class="item welcome-message">
-                <i class="user circle icon"></i>
-                <span>Bem-vindo, <?php echo $_SESSION['user_name']; ?></span>
+            <div class="item">
+                <?php if (isLoggedIn()): ?>
+                    <i class="fas fa-user-circle"></i>
+                    <span>Bem-vindo, <?php echo $_SESSION['user_name']; ?></span>
+                <?php endif; ?>
             </div>
             
             <div class="ui dropdown item">
-                <div class="settings-button">
-                    <i class="cog icon"></i>
-                </div>
+                <i class="fas fa-cog"></i>
                 <div class="menu">
                     <a href="<?php echo SITE_URL; ?>/modules/usuarios/editar.php?id=<?php echo $_SESSION['user_id']; ?>" class="item">
-                        <i class="user edit icon"></i> Meu Perfil
+                        <i class="fas fa-user-edit"></i> Meu Perfil
                     </a>
                     <div class="divider"></div>
                     <a href="<?php echo SITE_URL; ?>/auth/logout.php" class="item">
-                        <i class="sign-out icon"></i> Sair
+                        <i class="fas fa-sign-out-alt"></i> Sair
                     </a>
                 </div>
             </div>

@@ -154,14 +154,71 @@ include '../../includes/sidebar.php';
         </form>
     </div>
     
-    <!-- Resumo -->
+    <!-- Resumo Estatístico -->
     <div class="ui segment">
         <h3 class="ui header">Resumo do Período</h3>
-        <p>
-            <strong>Período:</strong> <?php echo date('d/m/Y', strtotime($data_inicio)); ?> até <?php echo date('d/m/Y', strtotime($data_fim)); ?><br>
-            <strong>Total de Acessos:</strong> <?php echo $total_acessos; ?>
+        <div class="ui four statistics">
+            <div class="statistic">
+                <div class="value" style="color: #2185d0; font-size: 2.5em; font-weight: bold;">
+                    <?php echo $total_acessos; ?>
+                </div>
+                <div class="label" style="color: #555; font-size: 1.1em;">Total de Acessos</div>
+            </div>
+            <div class="statistic">
+                <div class="value" style="color: #00b5ad; font-size: 2.5em; font-weight: bold;">
+                    <?php 
+                    $dias = count($acessos_por_dia);
+                    echo $dias > 0 ? round($total_acessos / $dias, 1) : 0;
+                    ?>
+                </div>
+                <div class="label" style="color: #555; font-size: 1.1em;">Média por Dia</div>
+            </div>
+            <div class="statistic">
+                <div class="value" style="color: #f2711c; font-size: 2.5em; font-weight: bold;">
+                    <?php 
+                    $maxDia = 0;
+                    foreach ($acessos_por_dia as $dia) {
+                        if ($dia['total'] > $maxDia) $maxDia = $dia['total'];
+                    }
+                    echo $maxDia;
+                    ?>
+                </div>
+                <div class="label" style="color: #555; font-size: 1.1em;">Maior em um Dia</div>
+            </div>
+            <div class="statistic">
+                <div class="value" style="color: #a333c8; font-size: 2.5em; font-weight: bold;">
+                    <?php 
+                    $tipoMaisUsado = count($acessos_por_tipo) > 0 ? $acessos_por_tipo[0]['tipo_acesso_remoto'] : 'N/A';
+                    echo htmlspecialchars($tipoMaisUsado);
+                    ?>
+                </div>
+                <div class="label" style="color: #555; font-size: 1.1em;">Tipo Mais Usado</div>
+            </div>
+        </div>
+        <p style="margin-top: 1em;">
+            <strong>Período:</strong> <?php echo date('d/m/Y', strtotime($data_inicio)); ?> até <?php echo date('d/m/Y', strtotime($data_fim)); ?>
         </p>
     </div>
+    <style>
+    .ui.statistics .statistic {
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        padding: 1.5em;
+        margin: 0.5em;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .ui.statistics .statistic:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+    }
+    .ui.statistics .statistic .value {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    .ui.statistics .statistic .label {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    </style>
     
     <!-- Gráficos e Estatísticas -->
     <div class="ui two column grid">
@@ -229,6 +286,13 @@ include '../../includes/sidebar.php';
                 <?php endif; ?>
             </tbody>
         </table>
+        <div class="ui right aligned grid">
+            <div class="right floated right aligned six wide column">
+                <a href="../acessos/listar.php?data_inicio=<?php echo $data_inicio; ?>&data_fim=<?php echo $data_fim; ?>&cliente=<?php echo urlencode($cliente); ?>" class="ui button">
+                    Ver Todos os Acessos
+                </a>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -275,6 +339,20 @@ include '../../includes/sidebar.php';
                             precision: 0
                         }
                     }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                label += context.raw || 0;
+                                return label;
+                            }
+                        }
+                    }
                 }
             }
         });
@@ -310,7 +388,21 @@ include '../../includes/sidebar.php';
                 }]
             },
             options: {
-                responsive: true
+                responsive: true,
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                label += context.raw || 0;
+                                return label;
+                            }
+                        }
+                    }
+                }
             }
         });
         
@@ -345,6 +437,23 @@ include '../../includes/sidebar.php';
                         beginAtZero: true,
                         ticks: {
                             precision: 0
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                label += context.raw || 0;
+                                return label;
+                            },
+                            title: function(context) {
+                                return context[0].label;
+                            }
                         }
                     }
                 }
@@ -382,7 +491,21 @@ include '../../includes/sidebar.php';
                 }]
             },
             options: {
-                responsive: true
+                responsive: true,
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                label += context.raw || 0;
+                                return label;
+                            }
+                        }
+                    }
+                }
             }
         });
     });

@@ -9,6 +9,26 @@ require_once '../../config/database.php';
 // Verificar se o usuário está logado
 requireLogin();
 
+// Processar exclusão de acesso, se aplicável
+if (isset($_GET['excluir']) && is_numeric($_GET['excluir'])) {
+    $id = intval($_GET['excluir']);
+    
+    // Excluir o acesso
+    $result = dbQuery("DELETE FROM acessos WHERE id = $id");
+    
+    if ($result) {
+        showAlert('Registro de acesso excluído com sucesso!', 'positive');
+    } else {
+        showAlert('Erro ao excluir registro de acesso.', 'negative');
+    }
+    
+    // Redirecionar de volta para a URL atual sem o parâmetro 'excluir'
+    $currentUrl = $_SERVER['REQUEST_URI'];
+    $redirectUrl = preg_replace('/&?excluir=\\d+/', '', $currentUrl);
+    header("Location: $redirectUrl");
+    exit;
+}
+
 // Incluir cabeçalho
 include '../../includes/header.php';
 
@@ -142,7 +162,7 @@ if (isAdmin()) {
                 <th>Usuário</th>
                 <?php endif; ?>
                 <th>IP</th>
-                <th>Detalhes</th>
+                <th>Ações</th>
             </tr>
         </thead>
         <tbody>
@@ -156,7 +176,11 @@ if (isAdmin()) {
                         <td><?php echo htmlspecialchars($acesso['usuario_nome']); ?></td>
                         <?php endif; ?>
                         <td><?php echo htmlspecialchars($acesso['ip_acesso']); ?></td>
-                        <td><?php echo htmlspecialchars($acesso['detalhes']); ?></td>
+                        <td>
+                            <a class="ui mini red button" href="javascript:void(0);" onclick="confirmarExclusao(<?php echo $acesso['id']; ?>)">
+                                <i class="trash icon"></i> Excluir
+                            </a>
+                        </td>
                     </tr>
                 <?php endforeach; ?>
             <?php else: ?>
@@ -216,10 +240,43 @@ if (isAdmin()) {
     </table>
 </div>
 
+<!-- Modal de confirmação de exclusão -->
+<div class="ui tiny modal" id="modal-excluir">
+    <div class="header">Confirmar Exclusão</div>
+    <div class="content">
+        <p>Tem certeza que deseja excluir este registro de acesso?</p>
+    </div>
+    <div class="actions">
+        <div class="ui cancel button">Cancelar</div>
+        <div class="ui red approve button" id="btn-confirmar-exclusao">Excluir</div>
+    </div>
+</div>
+
 <script>
     $(document).ready(function() {
         $('.ui.dropdown').dropdown();
+        
+        // Configurar o modal de exclusão
+        $('#modal-excluir').modal({
+            closable: false
+        });
     });
+    
+    function confirmarExclusao(id) {
+        $('#modal-excluir').modal({
+            closable: false,
+            onApprove: function () {
+                // Adicionar o parâmetro excluir à URL atual preservando outros parâmetros
+                let currentUrl = window.location.href;
+                if (currentUrl.indexOf('?') !== -1) {
+                    currentUrl += '&excluir=' + id;
+                } else {
+                    currentUrl += '?excluir=' + id;
+                }
+                window.location.href = currentUrl;
+            }
+        }).modal('show');
+    }
 </script>
 
 <?php

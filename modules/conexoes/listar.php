@@ -9,12 +9,6 @@ require_once '../../config/database.php';
 // Verificar se o usuário está logado
 requireLogin();
 
-// Incluir cabeçalho
-include '../../includes/header.php';
-
-// Incluir sidebar
-include '../../includes/sidebar.php';
-
 // Processar exclusão de conexão, se aplicável
 if (isset($_GET['excluir']) && is_numeric($_GET['excluir'])) {
     $id = intval($_GET['excluir']);
@@ -30,7 +24,68 @@ if (isset($_GET['excluir']) && is_numeric($_GET['excluir'])) {
         dbQuery("DELETE FROM conexoes WHERE id = $id");
         showAlert('Conexão excluída com sucesso!', 'positive');
     }
+    
+    // Redirecionar de volta para a URL atual sem o parâmetro 'excluir'
+    $currentUrl = $_SERVER['REQUEST_URI'];
+    $redirectUrl = preg_replace('/&?excluir=\\d+/', '', $currentUrl);
+    header("Location: $redirectUrl");
+    exit;
 }
+
+// Processar exclusão em lote
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'excluir_lote') {
+    if (isset($_POST['conexoes']) && is_array($_POST['conexoes']) && count($_POST['conexoes']) > 0) {
+        $idsExcluir = array_map('intval', $_POST['conexoes']);
+        $idsString = implode(',', $idsExcluir);
+        
+        // Verificar se alguma conexão selecionada tem acessos vinculados
+        $result = dbQuery("SELECT c.id, COUNT(a.id) as total_acessos 
+                         FROM conexoes c 
+                         LEFT JOIN acessos a ON c.id = a.id_conexao 
+                         WHERE c.id IN ($idsString) 
+                         GROUP BY c.id 
+                         HAVING total_acessos > 0");
+        
+        $conexoesComAcessos = array();
+        while ($row = dbFetchAssoc($result)) {
+            $conexoesComAcessos[] = $row['id'];
+        }
+        
+        if (count($conexoesComAcessos) > 0) {
+            // Algumas conexões têm acessos vinculados
+            $idsComAcessos = implode(', ', $conexoesComAcessos);
+            showAlert("Não é possível excluir as conexões com IDs: $idsComAcessos pois existem acessos vinculados a elas.", 'negative');
+            
+            // Filtrar os IDs que podem ser excluídos
+            $idsExcluir = array_diff($idsExcluir, $conexoesComAcessos);
+        }
+        
+        if (count($idsExcluir) > 0) {
+            // Excluir as conexões restantes
+            $idsString = implode(',', $idsExcluir);
+            $result = dbQuery("DELETE FROM conexoes WHERE id IN ($idsString)");
+            
+            if ($result) {
+                showAlert("Conexão(ões) excluída(s) com sucesso!", 'positive');
+            } else {
+                showAlert("Erro ao excluir conexão(ões).", 'negative');
+            }
+        }
+    } else {
+        showAlert('Nenhuma conexão selecionada para exclusão.', 'warning');
+    }
+    
+    // Redirecionar de volta para a URL atual
+    $currentUrl = $_SERVER['REQUEST_URI'];
+    header("Location: $currentUrl");
+    exit;
+}
+
+// Incluir cabeçalho
+include '../../includes/header.php';
+
+// Incluir sidebar
+include '../../includes/sidebar.php';
 
 // Configuração de busca e paginação
 $busca = isset($_GET['busca']) ? dbEscape($_GET['busca']) : '';
@@ -43,9 +98,37 @@ $filtro_data_fim = isset($_GET['filtro_data_fim']) ? dbEscape($_GET['filtro_data
 $filtro_sem_acesso = isset($_GET['filtro_sem_acesso']) ? true : false;
 $filtro_ordem = isset($_GET['filtro_ordem']) ? dbEscape($_GET['filtro_ordem']) : 'cliente_asc';
 
+// Parâmetros de ordenação
+$orderBy = isset($_GET['orderBy']) ? dbEscape($_GET['orderBy']) : 'cliente';
+$orderDir = isset($_GET['orderDir']) ? (strtolower(dbEscape($_GET['orderDir'])) === 'desc' ? 'desc' : 'asc') : 'asc';
+
 $pagina = isset($_GET['pagina']) ? intval($_GET['pagina']) : 1;
 $limite = isset($_GET['limite']) ? intval($_GET['limite']) : 10;
 $offset = ($pagina - 1) * $limite;
+
+// Função para gerar URLs de ordenação
+function gerarUrlOrdenacao($campo) {
+    global $orderBy, $orderDir;
+    
+    // Obter todos os parâmetros atuais da URL
+    $params = $_GET;
+    
+    // Determinar a direção da ordenação
+    if ($orderBy == $campo) {
+        // Se já estamos ordenando por este campo, inverter a direção
+        $novaDir = ($orderDir == 'asc') ? 'desc' : 'asc';
+    } else {
+        // Caso contrário, começar com ascendente
+        $novaDir = 'asc';
+    }
+    
+    // Atualizar parâmetros
+    $params['orderBy'] = $campo;
+    $params['orderDir'] = $novaDir;
+    
+    // Gerar URL
+    return '?' . http_build_query($params);
+}
 
 // Construir a consulta SQL
 $whereClause = '';
@@ -98,30 +181,37 @@ if (count($conditions) > 0) {
 
 // Definir ordem
 $orderClause = 'ORDER BY cliente ASC';
-switch ($filtro_ordem) {
-    case 'cliente_desc':
-        $orderClause = 'ORDER BY cliente DESC';
-        break;
-    case 'tipo_asc':
-        $orderClause = 'ORDER BY tipo_acesso_remoto ASC';
-        break;
-    case 'tipo_desc':
-        $orderClause = 'ORDER BY tipo_acesso_remoto DESC';
-        break;
-    case 'id_asc':
-        $orderClause = 'ORDER BY id ASC';
-        break;
-    case 'id_desc':
-        $orderClause = 'ORDER BY id DESC';
-        break;
-    case 'recente':
-        $orderClause = 'ORDER BY id DESC';
-        break;
-    case 'antigo':
-        $orderClause = 'ORDER BY id ASC';
-        break;
-    default:
-        $orderClause = 'ORDER BY cliente ASC';
+
+// Usar parâmetros de ordenação
+if ($orderBy && in_array($orderBy, ['cliente', 'tipo_acesso_remoto', 'id_acesso_remoto', 'data_ultimo_acesso'])) {
+    $orderClause = "ORDER BY $orderBy " . strtoupper($orderDir);
+} else {
+    // Manter compatibilidade com sistema de ordenação anterior
+    switch ($filtro_ordem) {
+        case 'cliente_desc':
+            $orderClause = 'ORDER BY cliente DESC';
+            break;
+        case 'tipo_asc':
+            $orderClause = 'ORDER BY tipo_acesso_remoto ASC';
+            break;
+        case 'tipo_desc':
+            $orderClause = 'ORDER BY tipo_acesso_remoto DESC';
+            break;
+        case 'id_asc':
+            $orderClause = 'ORDER BY id ASC';
+            break;
+        case 'id_desc':
+            $orderClause = 'ORDER BY id DESC';
+            break;
+        case 'recente':
+            $orderClause = 'ORDER BY id DESC';
+            break;
+        case 'antigo':
+            $orderClause = 'ORDER BY id ASC';
+            break;
+        default:
+            $orderClause = 'ORDER BY cliente ASC';
+    }
 }
 
 // Para usar a subconsulta com o último acesso, precisamos do alias para a tabela principal
@@ -216,6 +306,23 @@ while ($row = dbFetchAssoc($resultClientes)) {
             max-width: 350px;
             word-wrap: break-word;
         }
+        .ui.table .connection-row .select-checkbox {
+            width: 40px;
+            text-align: center;
+        }
+        
+        .connection-row.selected {
+            background-color: rgba(33, 133, 208, 0.1) !important;
+        }
+        
+        #btn-acoes-lote {
+            margin-left: 10px;
+        }
+        
+        .ui.table tr.connection-row:hover {
+            cursor: pointer;
+            background-color: rgba(0, 0, 0, 0.05) !important;
+        }
     </style>
 
     <!-- Barra de ações -->
@@ -305,23 +412,19 @@ while ($row = dbFetchAssoc($resultClientes)) {
                         <div class="fields">
                             <div class="five wide field">
                                 <label>Último Acesso - De</label>
-                                <div class="ui calendar" id="data-inicio">
-                                    <div class="ui input left icon">
-                                        <i class="calendar icon"></i>
-                                        <input type="text" name="filtro_data_inicio" placeholder="Data inicial" 
-                                               value="<?php echo htmlspecialchars($filtro_data_inicio ?? ''); ?>">
-                                    </div>
+                                <div class="ui input left icon">
+                                    <i class="calendar icon"></i>
+                                    <input type="date" name="filtro_data_inicio" placeholder="Data inicial" 
+                                           value="<?php echo htmlspecialchars($filtro_data_inicio ?? ''); ?>">
                                 </div>
                             </div>
                             
                             <div class="five wide field">
                                 <label>Último Acesso - Até</label>
-                                <div class="ui calendar" id="data-fim">
-                                    <div class="ui input left icon">
-                                        <i class="calendar icon"></i>
-                                        <input type="text" name="filtro_data_fim" placeholder="Data final" 
-                                               value="<?php echo htmlspecialchars($filtro_data_fim ?? ''); ?>">
-                                    </div>
+                                <div class="ui input left icon">
+                                    <i class="calendar icon"></i>
+                                    <input type="date" name="filtro_data_fim" placeholder="Data final" 
+                                           value="<?php echo htmlspecialchars($filtro_data_fim ?? ''); ?>">
                                 </div>
                             </div>
                             
@@ -377,22 +480,6 @@ while ($row = dbFetchAssoc($resultClientes)) {
                     <a href="listar.php" class="ui button">
                         <i class="times icon"></i> Limpar Filtros
                     </a>
-                    
-                    <button type="button" class="ui right floated button" id="btn-salvar-filtro">
-                        <i class="save icon"></i> Salvar Filtro
-                    </button>
-                    
-                    <div class="ui right floated dropdown button" id="btn-filtros-salvos">
-                        <i class="folder open icon"></i> Filtros Salvos
-                        <div class="menu" id="menu-filtros-salvos">
-                            <div class="header">
-                                <i class="tags icon"></i> Seus filtros salvos
-                            </div>
-                            <div class="divider"></div>
-                            <!-- Filtros salvos serão carregados via JavaScript -->
-                            <div class="item disabled">Nenhum filtro salvo</div>
-                        </div>
-                    </div>
                 </div>
             </form>
         </div>
@@ -409,138 +496,222 @@ while ($row = dbFetchAssoc($resultClientes)) {
     </div>
     <?php endif; ?>
 
-    <!-- Tabela de conexões -->
-    <table class="ui celled table selectable">
-        <thead>
-            <tr>
-                <th class="center aligned id-column">ID</th>
-                <th class="cliente-column">Cliente</th>
-                <th class="tipo-column">Tipo</th>
-                <th class="id-acesso-column">ID de Acesso</th>
-                <th class="observacoes-column">Observações</th>
-                <th class="center aligned acoes-column">Ações</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php if (count($conexoes) > 0): ?>
-                <?php foreach ($conexoes as $conexao): ?>
-                    <tr class="connection-row">
-                        <td class="center aligned id-column"><?php echo $conexao['id']; ?></td>
-                        <td class="ellipsis cliente-column" data-tooltip="<?php echo htmlspecialchars($conexao['cliente'] ?? ''); ?>" data-position="top left">
-                            <?php echo htmlspecialchars($conexao['cliente'] ?? ''); ?>
-                        </td>
-                        <td class="ellipsis tipo-column" data-tooltip="<?php echo htmlspecialchars($conexao['tipo_acesso_remoto'] ?? ''); ?>" data-position="top left">
-                            <div class="ui label" style="
-                                padding: 4px 8px;
-                                font-size: 0.85em;
-                                background-color: <?php 
-                                switch($conexao['tipo_acesso_remoto'] ?? '') {
-                                    case 'AnyDesk': echo '#ef443b'; break;
-                                    case 'TeamViewer': echo '#1a68d6'; break;
-                                    case 'RDP': echo '#2c82c9'; break;
-                                    case 'VPN': echo '#27ae60'; break;
-                                    case 'SSH': echo '#333333'; break;
-                                    case 'RustDesk': echo '#4d4d4d'; break;
-                                    case 'Supremo': echo '#7928CA'; break;
-                                    default: echo '#7f8c8d'; break;
-                                }
-                                ?>;
-                                color: white;"
-                            >
-                                <?php echo htmlspecialchars($conexao['tipo_acesso_remoto'] ?? ''); ?>
-                            </div>
-                        </td>
-                        <td class="ellipsis id-acesso-column" data-tooltip="<?php echo htmlspecialchars($conexao['id_acesso_remoto'] ?? ''); ?>" data-position="top left">
-                            <?php echo htmlspecialchars($conexao['id_acesso_remoto'] ?? ''); ?>
-                        </td>
-                        <td class="ellipsis observacoes-column" data-tooltip="<?php echo htmlspecialchars($conexao['observacoes'] ?? ''); ?>" data-position="top left">
-                            <?php echo htmlspecialchars($conexao['observacoes'] ?? ''); ?>
-                        </td>
-                        <td class="acoes-column">
-                            <a class="ui mini blue button" href="javascript:void(0);" onclick="acessarConexao(<?php echo $conexao['id']; ?>, 
-                                '<?php echo htmlspecialchars(addslashes($conexao['cliente'] ?? '')); ?>', 
-                                '<?php echo htmlspecialchars(addslashes($conexao['tipo_acesso_remoto'] ?? '')); ?>', 
-                                '<?php echo htmlspecialchars(addslashes($conexao['id_acesso_remoto'] ?? '')); ?>', 
-                                '<?php echo htmlspecialchars(addslashes($conexao['senha_acesso_remoto'] ?? '')); ?>')">
-                                <i class="external alternate icon"></i> Acessar
-                            </a>
-                            
-                            <a class="ui mini green button" href="javascript:void(0);" onclick="abrirModalEditar(<?php echo $conexao['id']; ?>, 
-                                '<?php echo htmlspecialchars(addslashes($conexao['cliente'] ?? '')); ?>', 
-                                '<?php echo htmlspecialchars(addslashes($conexao['tipo_acesso_remoto'] ?? '')); ?>', 
-                                '<?php echo htmlspecialchars(addslashes($conexao['id_acesso_remoto'] ?? '')); ?>', 
-                                '<?php echo htmlspecialchars(addslashes($conexao['senha_acesso_remoto'] ?? '')); ?>', 
-                                '<?php echo htmlspecialchars(addslashes($conexao['observacoes'] ?? '')); ?>')">
-                                <i class="edit icon"></i> Editar
-                            </a>
-                            
-                            <a class="ui mini red button" href="javascript:void(0);" onclick="confirmarExclusao(<?php echo $conexao['id']; ?>)">
-                                <i class="trash icon"></i> Excluir
-                            </a>
-                        </td>
-                    </tr>
-                <?php endforeach; ?>
-            <?php else: ?>
+    <!-- Botão para excluir em lote -->
+    <div class="ui segment">
+        <button type="button" id="btn-excluir-lote" class="ui red button disabled">
+            <i class="trash icon"></i> Excluir Selecionados (<span id="contador-selecionados">0</span>)
+        </button>
+    </div>
+
+    <!-- Modal de confirmação para exclusão em lote -->
+    <div class="ui mini modal" id="modal-excluir-lote">
+        <div class="header">Confirmar Exclusão em Lote</div>
+        <div class="content">
+            <p>Você está prestes a excluir <strong><span id="qtd-itens-excluir">0</span> conexões</strong>.</p>
+            <p>Esta ação não pode ser desfeita. Deseja continuar?</p>
+        </div>
+        <div class="actions">
+            <div class="ui cancel button">Cancelar</div>
+            <div class="ui negative approve button" id="btn-confirmar-exclusao-lote">Excluir</div>
+        </div>
+    </div>
+
+    <!-- Formulário para exclusão em lote -->
+    <form id="form-exclusao-lote" method="POST" action="">
+        <input type="hidden" name="action" value="excluir_lote">
+        <!-- Os checkboxes serão adicionados dinamicamente aqui -->
+
+        <!-- Tabela de conexões -->
+        <table class="ui celled striped table">
+            <thead>
                 <tr>
-                    <td colspan="6" class="center aligned">Nenhuma conexão encontrada</td>
-                </tr>
-            <?php endif; ?>
-        </tbody>
-        <tfoot>
-            <tr>
-                <th colspan="6">
-                    <?php if ($totalPaginas > 1): ?>
-                        <div class="ui right floated pagination menu">
-                            <?php 
-                            // Construir a query string para manter os filtros na paginação
-                            $queryParams = $_GET;
-                            unset($queryParams['pagina']);
-                            $queryString = http_build_query($queryParams);
-                            $queryPrefix = !empty($queryString) ? "?$queryString&pagina=" : "?pagina=";
-                            ?>
-                            
-                            <?php if ($pagina > 1): ?>
-                                <a class="item" href="<?php echo $queryPrefix; ?>1">
-                                    <i class="angle double left icon"></i>
-                                </a>
-                                <a class="item" href="<?php echo $queryPrefix . ($pagina - 1); ?>">
-                                    <i class="angle left icon"></i>
-                                </a>
-                            <?php endif; ?>
-                            
-                            <?php
-                            // Mostrar apenas algumas páginas
-                            $intervalo = 2;
-                            $inicio = max(1, $pagina - $intervalo);
-                            $fim = min($totalPaginas, $pagina + $intervalo);
-                            
-                            for ($i = $inicio; $i <= $fim; $i++) {
-                                if ($i == $pagina) {
-                                    echo "<a class='active item'>$i</a>";
-                                } else {
-                                    echo "<a class='item' href='" . $queryPrefix . $i . "'>$i</a>";
-                                }
-                            }
-                            ?>
-                            
-                            <?php if ($pagina < $totalPaginas): ?>
-                                <a class="item" href="<?php echo $queryPrefix . ($pagina + 1); ?>">
-                                    <i class="angle right icon"></i>
-                                </a>
-                                <a class="item" href="<?php echo $queryPrefix . $totalPaginas; ?>">
-                                    <i class="angle double right icon"></i>
-                                </a>
-                            <?php endif; ?>
+                    <th>
+                        <div class="ui checkbox">
+                            <input type="checkbox" id="selecionar-todos">
+                            <label></label>
                         </div>
-                    <?php endif; ?>
-                    
-                    <div>
-                        Exibindo <?php echo count($conexoes); ?> de <?php echo $totalRegistros; ?> conexões
-                    </div>
-                </th>
-            </tr>
-        </tfoot>
-    </table>
+                    </th>
+                    <th>
+                        <a href="<?php echo gerarUrlOrdenacao('cliente'); ?>" class="<?php echo $orderBy == 'cliente' ? 'active' : ''; ?>">
+                            Cliente <?php echo $orderBy == 'cliente' ? ($orderDir == 'asc' ? '↑' : '↓') : ''; ?>
+                        </a>
+                    </th>
+                    <th>
+                        <a href="<?php echo gerarUrlOrdenacao('tipo_acesso_remoto'); ?>" class="<?php echo $orderBy == 'tipo_acesso_remoto' ? 'active' : ''; ?>">
+                            Tipo de Acesso <?php echo $orderBy == 'tipo_acesso_remoto' ? ($orderDir == 'asc' ? '↑' : '↓') : ''; ?>
+                        </a>
+                    </th>
+                    <th>
+                        <a href="<?php echo gerarUrlOrdenacao('id_acesso_remoto'); ?>" class="<?php echo $orderBy == 'id_acesso_remoto' ? 'active' : ''; ?>">
+                            ID do Acesso <?php echo $orderBy == 'id_acesso_remoto' ? ($orderDir == 'asc' ? '↑' : '↓') : ''; ?>
+                        </a>
+                    </th>
+                    <th>
+                        <a href="<?php echo gerarUrlOrdenacao('data_ultimo_acesso'); ?>" class="<?php echo $orderBy == 'data_ultimo_acesso' ? 'active' : ''; ?>">
+                            Último Acesso <?php echo $orderBy == 'data_ultimo_acesso' ? ($orderDir == 'asc' ? '↑' : '↓') : ''; ?>
+                        </a>
+                    </th>
+                    <th>
+                        <a href="<?php echo gerarUrlOrdenacao('situacao_acesso'); ?>" class="<?php echo $orderBy == 'situacao_acesso' ? 'active' : ''; ?>">
+                            Situação <?php echo $orderBy == 'situacao_acesso' ? ($orderDir == 'asc' ? '↑' : '↓') : ''; ?>
+                        </a>
+                    </th>
+                    <th>Observações</th>
+                    <th class="center aligned">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (count($conexoes) > 0): ?>
+                    <?php foreach ($conexoes as $conexao): ?>
+                        <?php 
+                        $situacaoClass = '';
+                        $situacaoIcon = '';
+                        if (isset($conexao['situacao_acesso'])) {
+                            switch ($conexao['situacao_acesso']) {
+                                case 'Ativo':
+                                    $situacaoClass = 'positive';
+                                    $situacaoIcon = 'check circle';
+                                    break;
+                                case 'Inativo':
+                                    $situacaoClass = 'negative';
+                                    $situacaoIcon = 'times circle';
+                                    break;
+                                case 'Pendente':
+                                    $situacaoClass = 'warning';
+                                    $situacaoIcon = 'exclamation circle';
+                                    break;
+                            }
+                        }
+                        ?>
+                        <tr class="<?php echo $situacaoClass; ?>">
+                            <td class="collapsing">
+                                <div class="ui checkbox">
+                                    <input type="checkbox" class="row-checkbox" name="conexoes[]" value="<?php echo $conexao['id']; ?>">
+                                    <label></label>
+                                </div>
+                            </td>
+                            <td>
+                                <?php echo htmlspecialchars($conexao['cliente'] ?? ''); ?>
+                            </td>
+                            <td>
+                                <div class="ui label" style="
+                                    padding: 4px 8px;
+                                    font-size: 0.85em;
+                                    background-color: <?php 
+                                    switch($conexao['tipo_acesso_remoto'] ?? '') {
+                                        case 'AnyDesk': echo '#ef443b'; break;
+                                        case 'TeamViewer': echo '#1a68d6'; break;
+                                        case 'RDP': echo '#2c82c9'; break;
+                                        case 'VPN': echo '#27ae60'; break;
+                                        case 'SSH': echo '#333333'; break;
+                                        case 'RustDesk': echo '#4d4d4d'; break;
+                                        case 'Supremo': echo '#7928CA'; break;
+                                        default: echo '#7f8c8d'; break;
+                                    }
+                                    ?>;
+                                    color: white;"
+                                >
+                                    <?php echo htmlspecialchars($conexao['tipo_acesso_remoto'] ?? ''); ?>
+                                </div>
+                            </td>
+                            <td>
+                                <?php echo htmlspecialchars($conexao['id_acesso_remoto'] ?? ''); ?>
+                            </td>
+                            <td>
+                                <?php echo htmlspecialchars($conexao['data_ultimo_acesso'] ?? ''); ?>
+                            </td>
+                            <td>
+                                <?php echo htmlspecialchars($conexao['situacao_acesso'] ?? ''); ?>
+                            </td>
+                            <td>
+                                <?php echo htmlspecialchars($conexao['observacoes'] ?? ''); ?>
+                            </td>
+                            <td class="acoes-column">
+                                <a class="ui mini blue button" href="javascript:void(0);" onclick="acessarConexao(<?php echo $conexao['id']; ?>, 
+                                    '<?php echo htmlspecialchars(addslashes($conexao['cliente'] ?? '')); ?>', 
+                                    '<?php echo htmlspecialchars(addslashes($conexao['tipo_acesso_remoto'] ?? '')); ?>', 
+                                    '<?php echo htmlspecialchars(addslashes($conexao['id_acesso_remoto'] ?? '')); ?>', 
+                                    '<?php echo htmlspecialchars(addslashes($conexao['senha_acesso_remoto'] ?? '')); ?>')">
+                                    <i class="external alternate icon"></i> Acessar
+                                </a>
+                                
+                                <a class="ui mini green button" href="javascript:void(0);" onclick="abrirModalEditar(<?php echo $conexao['id']; ?>, 
+                                    '<?php echo htmlspecialchars(addslashes($conexao['cliente'] ?? '')); ?>', 
+                                    '<?php echo htmlspecialchars(addslashes($conexao['tipo_acesso_remoto'] ?? '')); ?>', 
+                                    '<?php echo htmlspecialchars(addslashes($conexao['id_acesso_remoto'] ?? '')); ?>', 
+                                    '<?php echo htmlspecialchars(addslashes($conexao['senha_acesso_remoto'] ?? '')); ?>', 
+                                    '<?php echo htmlspecialchars(addslashes($conexao['observacoes'] ?? '')); ?>')">
+                                    <i class="edit icon"></i> Editar
+                                </a>
+                                
+                                <a class="ui mini red button" href="javascript:void(0);" onclick="confirmarExclusao(<?php echo $conexao['id']; ?>)">
+                                    <i class="trash icon"></i> Excluir
+                                </a>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <tr>
+                        <td colspan="7" class="center aligned">Nenhuma conexão encontrada</td>
+                    </tr>
+                <?php endif; ?>
+            </tbody>
+            <tfoot>
+                <tr>
+                    <th colspan="8">
+                        <?php if ($totalPaginas > 1): ?>
+                            <div class="ui right floated pagination menu">
+                                <?php 
+                                // Construir a query string para manter os filtros na paginação
+                                $queryParams = $_GET;
+                                unset($queryParams['pagina']);
+                                $queryString = http_build_query($queryParams);
+                                $queryPrefix = !empty($queryString) ? "?$queryString&pagina=" : "?pagina=";
+                                ?>
+                                
+                                <?php if ($pagina > 1): ?>
+                                    <a class="item" href="<?php echo $queryPrefix; ?>1">
+                                        <i class="angle double left icon"></i>
+                                    </a>
+                                    <a class="item" href="<?php echo $queryPrefix . ($pagina - 1); ?>">
+                                        <i class="angle left icon"></i>
+                                    </a>
+                                <?php endif; ?>
+                                
+                                <?php
+                                // Mostrar apenas algumas páginas
+                                $intervalo = 2;
+                                $inicio = max(1, $pagina - $intervalo);
+                                $fim = min($totalPaginas, $pagina + $intervalo);
+                                
+                                for ($i = $inicio; $i <= $fim; $i++) {
+                                    if ($i == $pagina) {
+                                        echo "<a class='active item'>$i</a>";
+                                    } else {
+                                        echo "<a class='item' href='" . $queryPrefix . $i . "'>$i</a>";
+                                    }
+                                }
+                                ?>
+                                
+                                <?php if ($pagina < $totalPaginas): ?>
+                                    <a class="item" href="<?php echo $queryPrefix . ($pagina + 1); ?>">
+                                        <i class="angle right icon"></i>
+                                    </a>
+                                    <a class="item" href="<?php echo $queryPrefix . $totalPaginas; ?>">
+                                        <i class="angle double right icon"></i>
+                                    </a>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
+                        
+                        <div>
+                            Exibindo <?php echo count($conexoes); ?> de <?php echo $totalRegistros; ?> conexões
+                        </div>
+                    </th>
+                </tr>
+            </tfoot>
+        </table>
+    </form>
 </div>
 
 <!-- Modal de confirmação de exclusão -->
@@ -664,29 +835,19 @@ while ($row = dbFetchAssoc($resultClientes)) {
     </div>
 </div>
 
-<!-- Modal para Salvar Filtro -->
-<div class="ui tiny modal" id="modal-salvar-filtro">
-    <div class="header"><i class="save icon"></i> Salvar Filtro</div>
-    <div class="content">
-        <form class="ui form" id="form-salvar-filtro">
-            <div class="field">
-                <label>Nome do Filtro</label>
-                <input type="text" name="nome_filtro" id="nome-filtro" placeholder="Digite um nome para identificar este filtro">
-            </div>
-        </form>
-    </div>
-    <div class="actions">
-        <div class="ui cancel button">Cancelar</div>
-        <div class="ui primary approve button" id="btn-confirmar-salvar-filtro">Salvar</div>
-    </div>
-</div>
-
 <script>
     function confirmarExclusao(id) {
         $('#modal-excluir').modal({
             closable: false,
             onApprove: function () {
-                window.location.href = '?excluir=' + id;
+                // Adicionar o parâmetro excluir à URL atual preservando outros parâmetros
+                let currentUrl = window.location.href;
+                if (currentUrl.indexOf('?') !== -1) {
+                    currentUrl += '&excluir=' + id;
+                } else {
+                    currentUrl += '?excluir=' + id;
+                }
+                window.location.href = currentUrl;
             }
         }).modal('show');
     }
@@ -836,68 +997,15 @@ while ($row = dbFetchAssoc($resultClientes)) {
             $(this).closest('.message').transition('fade');
         });
         
-        // Inicializar datepickers
-        $('#data-inicio').calendar({
-            type: 'date',
-            formatter: {
-                date: function(date, settings) {
-                    if (!date) return '';
-                    var day = date.getDate();
-                    var month = date.getMonth() + 1;
-                    var year = date.getFullYear();
-                    return (day < 10 ? '0' + day : day) + '/' + 
-                           (month < 10 ? '0' + month : month) + '/' + 
-                           year;
-                }
-            }
-        });
-        
-        $('#data-fim').calendar({
-            type: 'date',
-            formatter: {
-                date: function(date, settings) {
-                    if (!date) return '';
-                    var day = date.getDate();
-                    var month = date.getMonth() + 1;
-                    var year = date.getFullYear();
-                    return (day < 10 ? '0' + day : day) + '/' + 
-                           (month < 10 ? '0' + month : month) + '/' + 
-                           year;
-                }
-            }
-        });
-        
         // Inicializar dropdown de cliente com busca
         $('#dropdown-cliente').dropdown({
             fullTextSearch: true,
             allowAdditions: false
         });
         
-        // Inicializar dropdown de filtros salvos
-        $('#btn-filtros-salvos').dropdown();
-        
-        // Carregar filtros salvos logo ao carregar a página
-        carregarFiltrosSalvos();
-        
-        // Salvar filtro atual
-        $('#btn-salvar-filtro').on('click', function() {
-            $('#nome-filtro').val(''); // Limpar o campo
-            $('#modal-salvar-filtro').modal({
-                closable: false,
-                onApprove: function() {
-                    salvarFiltroAtual();
-                    return true;
-                }
-            }).modal('show');
-        });
-        
         // Inicializar tooltips para células com texto truncado
-        $('.ellipsis').popup({
-            hoverable: true,
-            delay: {
-                show: 300,
-                hide: 100
-            }
+        $('[data-tooltip]').popup({
+            position: 'top left'
         });
         
         // Validação do formulário
@@ -927,164 +1035,119 @@ while ($row = dbFetchAssoc($resultClientes)) {
             }
         });
         
-        // Validação do formulário de salvar filtro
-        $('#form-salvar-filtro').form({
-            fields: {
-                nome_filtro: {
-                    identifier: 'nome_filtro',
-                    rules: [{
-                        type: 'empty',
-                        prompt: 'Por favor, insira um nome para o filtro'
-                    }]
+        // Selecionar/deselecionar todos
+        $('#selecionar-todos').on('change', function() {
+            const isChecked = this.checked;
+            $('.row-checkbox').each(function() {
+                $(this).prop('checked', isChecked);
+                const tr = $(this).closest('tr');
+                if (isChecked) {
+                    tr.addClass('selected');
+                } else {
+                    tr.removeClass('selected');
                 }
-            }
+            });
+            atualizarBotaoLote();
         });
+        
+        // Inicializar checkboxes individuais
+        $('.row-checkbox').on('change', function(e) {
+            e.stopPropagation();
+            const isChecked = this.checked;
+            const tr = $(this).closest('tr');
+            
+            if (isChecked) {
+                tr.addClass('selected');
+            } else {
+                tr.removeClass('selected');
+                // Desmarcar o "selecionar todos"
+                $('#selecionar-todos').prop('checked', false);
+            }
+            
+            // Verificar se todos os checkboxes estão marcados
+            const total = $('.row-checkbox').length;
+            const marcados = $('.row-checkbox:checked').length;
+            
+            if (marcados === total) {
+                $('#selecionar-todos').prop('checked', true);
+            }
+            
+            atualizarBotaoLote();
+        });
+        
+        // Verificar estado inicial
+        atualizarBotaoLote();
     });
     
-    // Função para salvar o filtro atual
-    function salvarFiltroAtual() {
-        const nomeFiltro = $('#nome-filtro').val();
-        if (!nomeFiltro) {
-            $('body').toast({
-                class: 'error',
-                message: 'Digite um nome para o filtro',
-                showProgress: 'bottom',
-                displayTime: 2000
-            });
-            return false;
-        }
+    // Função para confirmar exclusão em lote
+    function confirmarExclusaoLote() {
+        const selecionadas = document.querySelectorAll('input.row-checkbox:checked').length;
         
-        // Obter a query string atual
-        const queryString = window.location.search.substring(1);
-        if (!queryString) {
+        if (selecionadas === 0) {
             $('body').toast({
                 class: 'warning',
-                message: 'Não há filtros para salvar',
+                message: 'Selecione pelo menos uma conexão para excluir',
                 showProgress: 'bottom',
                 displayTime: 2000
             });
-            return false;
-        }
-        
-        // Salvar no localStorage
-        const filtrosSalvos = JSON.parse(localStorage.getItem('filtrosSalvos') || '[]');
-        
-        // Verificar se já existe um filtro com este nome
-        const nomeExistente = filtrosSalvos.findIndex(f => f.nome.toLowerCase() === nomeFiltro.toLowerCase()) >= 0;
-        if (nomeExistente) {
-            if (!confirm(`Já existe um filtro chamado "${nomeFiltro}". Deseja substituí-lo?`)) {
-                return false;
-            }
-            // Remover o filtro existente
-            const index = filtrosSalvos.findIndex(f => f.nome.toLowerCase() === nomeFiltro.toLowerCase());
-            if (index >= 0) {
-                filtrosSalvos.splice(index, 1);
-            }
-        }
-        
-        // Adicionar o novo filtro
-        filtrosSalvos.push({
-            nome: nomeFiltro,
-            query: queryString,
-            data: new Date().toISOString()
-        });
-        
-        // Ordenar por nome
-        filtrosSalvos.sort((a, b) => a.nome.localeCompare(b.nome));
-        
-        // Salvar no localStorage
-        localStorage.setItem('filtrosSalvos', JSON.stringify(filtrosSalvos));
-        
-        // Recarregar lista de filtros
-        carregarFiltrosSalvos();
-        
-        // Feedback para o usuário
-        $('body').toast({
-            class: 'success',
-            message: 'Filtro salvo com sucesso!',
-            showProgress: 'bottom',
-            displayTime: 2000
-        });
-        
-        return true;
-    }
-    
-    function carregarFiltrosSalvos() {
-        const filtrosSalvos = JSON.parse(localStorage.getItem('filtrosSalvos') || '[]');
-        const menu = $('#menu-filtros-salvos');
-        
-        // Limpar menu exceto o cabeçalho e o divider
-        menu.find('.item:not(.header):not(.disabled)').remove();
-        
-        if (filtrosSalvos.length === 0) {
-            // Verificar se já existe um item "Nenhum filtro salvo"
-            if (menu.find('.item.disabled').length === 0) {
-                menu.append('<div class="item disabled">Nenhum filtro salvo</div>');
-            }
             return;
-        } else {
-            // Remover o item "Nenhum filtro salvo" se existir
-            menu.find('.item.disabled').remove();
         }
         
-        // Adicionar filtros salvos ao menu
-        filtrosSalvos.forEach((filtro, index) => {
-            try {
-                const dataFormatada = new Date(filtro.data).toLocaleDateString('pt-BR');
-                
-                const item = $(`
-                    <div class="item" data-value="${index}">
-                        <span class="text">${filtro.nome}</span>
-                        <span class="description">${dataFormatada}</span>
-                        <i class="trash alternate outline icon right floated delete-filter" data-index="${index}"></i>
-                    </div>
-                `);
-                
-                menu.append(item);
-            } catch (e) {
-                console.error('Erro ao processar filtro:', e);
-            }
-        });
+        // Atualizar o texto do modal
+        document.getElementById('qtd-itens-excluir').textContent = selecionadas;
+        document.getElementById('contador-selecionados').textContent = selecionadas;
         
-        // Configurar eventos de click nos filtros
-        menu.find('.item:not(.header):not(.disabled)').on('click', function(e) {
-            // Verificar se clicou no ícone de lixeira
-            if ($(e.target).hasClass('delete-filter') || $(e.target).closest('.delete-filter').length > 0) {
-                e.stopPropagation();
-                const index = $(e.target).data('index') || $(e.target).closest('.delete-filter').data('index');
-                excluirFiltro(index);
-                return false;
+        // Exibir o modal de confirmação
+        $('#modal-excluir-lote').modal({
+            closable: false,
+            onApprove: function() {
+                document.getElementById('form-exclusao-lote').submit();
             }
-            
-            // Aplicar o filtro
-            const index = $(this).data('value');
-            if (typeof index !== 'undefined' && filtrosSalvos[index]) {
-                const query = filtrosSalvos[index].query;
-                window.location.href = `?${query}`;
-            }
-        });
+        }).modal('show');
     }
     
-    function excluirFiltro(index) {
-        const filtrosSalvos = JSON.parse(localStorage.getItem('filtrosSalvos') || '[]');
+    // Atualizar visibilidade do botão de ações em lote
+    function atualizarBotaoLote() {
+        const selecionadas = document.querySelectorAll('input.row-checkbox:checked').length;
+        document.getElementById('contador-selecionados').textContent = selecionadas;
+        const btnExcluirLote = document.getElementById('btn-excluir-lote');
         
-        if (index >= 0 && index < filtrosSalvos.length) {
-            const nome = filtrosSalvos[index].nome;
-            filtrosSalvos.splice(index, 1);
-            localStorage.setItem('filtrosSalvos', JSON.stringify(filtrosSalvos));
-            
-            // Recarregar lista de filtros
-            carregarFiltrosSalvos();
-            
-            // Feedback
-            $('body').toast({
-                class: 'info',
-                message: `Filtro "${nome}" removido`,
-                showProgress: 'bottom',
-                displayTime: 2000
-            });
+        if (selecionadas > 0) {
+            btnExcluirLote.classList.remove('disabled');
+        } else {
+            btnExcluirLote.classList.add('disabled');
         }
     }
+    
+    // Inicializar contador ao carregar a página
+    document.getElementById('contador-selecionados').textContent = '0';
+    
+    // Marcar/desmarcar ao clicar na linha
+    $(document).on('click', 'tr', function(e) {
+        // Não executar se o clique for em um botão ou link dentro da linha
+        if ($(e.target).closest('a, button, .ui.checkbox, input, select').length === 0) {
+            const checkbox = $(this).find('.row-checkbox');
+            if (checkbox.length > 0) {
+                const newState = !checkbox.prop('checked');
+                checkbox.prop('checked', newState);
+                
+                if (newState) {
+                    $(this).addClass('selected');
+                } else {
+                    $(this).removeClass('selected');
+                    // Desmarcar o "selecionar todos" se algum item for desmarcado
+                    $('#selecionar-todos').prop('checked', false);
+                }
+                
+                atualizarBotaoLote();
+            }
+        }
+    });
+    
+    // Configurar o botão de exclusão em lote
+    $('#btn-excluir-lote').on('click', function() {
+        confirmarExclusaoLote();
+    });
 </script>
 
 <?php

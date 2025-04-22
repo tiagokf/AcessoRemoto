@@ -89,7 +89,7 @@ $totalPaginas = ceil($totalRegistros / $limite);
     <!-- Barra de ações -->
     <div class="ui grid">
         <div class="eight wide column">
-            <a href="adicionar.php" class="ui primary button">
+            <a href="javascript:void(0);" onclick="abrirModalAdicionar()" class="ui primary button">
                 <i class="plus icon"></i> Novo Usuário
             </a>
         </div>
@@ -137,13 +137,13 @@ $totalPaginas = ceil($totalRegistros / $limite);
                             <?php echo $usuario['ultimo_acesso'] ? date('d/m/Y H:i', strtotime($usuario['ultimo_acesso'])) : 'Nunca acessou'; ?>
                         </td>
                         <td class="center aligned collapsing">
-                            <div class="ui mini buttons">
-                                <a href="editar.php?id=<?php echo $usuario['id']; ?>" class="ui green button">
-                                    <i class="edit icon"></i> Editar
+                            <div class="ui mini buttons" style="display: flex; justify-content: center; gap: 8px; min-width: 160px;">
+                                <a href="javascript:void(0);" onclick="abrirModalEditar(<?php echo $usuario['id']; ?>)" class="ui green button" style="min-width: 70px; padding: 6px 12px; display: flex; align-items: center; justify-content: center; gap: 5px;">
+                                    <i class="edit icon" style="margin: 0;"></i> Editar
                                 </a>
                                 <?php if ($usuario['id'] != $_SESSION['user_id']): ?>
-                                    <a href="javascript:void(0);" onclick="confirmarExclusao(<?php echo $usuario['id']; ?>)" class="ui red button">
-                                        <i class="trash icon"></i> Excluir
+                                    <a href="javascript:void(0);" onclick="confirmarExclusao(<?php echo $usuario['id']; ?>)" class="ui red button" style="min-width: 70px; padding: 6px 12px; display: flex; align-items: center; justify-content: center; gap: 5px;">
+                                        <i class="trash icon" style="margin: 0;"></i> Excluir
                                     </a>
                                 <?php endif; ?>
                             </div>
@@ -217,6 +217,77 @@ $totalPaginas = ceil($totalRegistros / $limite);
     </div>
 </div>
 
+<!-- Modal para Adicionar Usuário -->
+<div class="ui modal" id="modal-adicionar">
+    <i class="close icon"></i>
+    <div class="header">
+        Adicionar Novo Usuário
+    </div>
+    <div class="content">
+        <form class="ui form" id="form-adicionar" method="POST" action="javascript:void(0);">
+            <div class="field">
+                <label>Nome</label>
+                <input type="text" name="nome" placeholder="Nome completo" required>
+            </div>
+            <div class="field">
+                <label>E-mail</label>
+                <input type="email" name="email" placeholder="E-mail" required>
+            </div>
+            <div class="field">
+                <label>Senha</label>
+                <input type="password" name="senha" placeholder="Senha" required>
+            </div>
+            <div class="field">
+                <label>Nível de Acesso</label>
+                <select class="ui dropdown" name="nivel_acesso" required>
+                    <option value="user">Usuário</option>
+                    <option value="admin">Administrador</option>
+                </select>
+            </div>
+        </form>
+    </div>
+    <div class="actions">
+        <div class="ui cancel button">Cancelar</div>
+        <div class="ui primary approve button" onclick="salvarNovoUsuario();">Salvar</div>
+    </div>
+</div>
+
+<!-- Modal para Editar Usuário -->
+<div class="ui modal" id="modal-editar">
+    <i class="close icon"></i>
+    <div class="header">
+        Editar Usuário
+    </div>
+    <div class="content">
+        <form class="ui form" id="form-editar" method="POST" action="javascript:void(0);">
+            <input type="hidden" name="id" id="edit-id">
+            <div class="field">
+                <label>Nome</label>
+                <input type="text" name="nome" id="edit-nome" placeholder="Nome completo" required>
+            </div>
+            <div class="field">
+                <label>E-mail</label>
+                <input type="email" name="email" id="edit-email" placeholder="E-mail" required>
+            </div>
+            <div class="field">
+                <label>Senha (deixe em branco para não alterar)</label>
+                <input type="password" name="senha" id="edit-senha" placeholder="Nova senha">
+            </div>
+            <div class="field">
+                <label>Nível de Acesso</label>
+                <select class="ui dropdown" name="nivel_acesso" id="edit-nivel" required>
+                    <option value="user">Usuário</option>
+                    <option value="admin">Administrador</option>
+                </select>
+            </div>
+        </form>
+    </div>
+    <div class="actions">
+        <div class="ui cancel button">Cancelar</div>
+        <div class="ui primary approve button" onclick="salvarEdicaoUsuario();">Salvar</div>
+    </div>
+</div>
+
 <script>
     function confirmarExclusao(id) {
         $('#modal-excluir').modal({
@@ -226,7 +297,109 @@ $totalPaginas = ceil($totalRegistros / $limite);
             }
         }).modal('show');
     }
+    
+    function abrirModalAdicionar() {
+        $('#form-adicionar')[0].reset();
+        $('#modal-adicionar').modal({
+            closable: true
+        }).modal('show');
+    }
+    
+    function abrirModalEditar(id) {
+        $('#edit-id').val(id);
+        // Carregar dados do usuário via AJAX
+        $.ajax({
+            url: 'buscar_usuario.php',
+            method: 'GET',
+            data: { id: id },
+            dataType: 'json',
+            success: function(data) {
+                if (data.error) {
+                    alert('Erro: ' + data.error);
+                } else {
+                    $('#edit-nome').val(data.nome);
+                    $('#edit-email').val(data.email);
+                    $('#edit-nivel').val(data.nivel_acesso);
+                    $('#edit-senha').val('');
+                    $('#modal-editar').modal({
+                        closable: true
+                    }).modal('show');
+                }
+            },
+            error: function(xhr, status, error) {
+                alert('Erro ao buscar dados do usuário: ' + error);
+            }
+        });
+    }
+    
+    function salvarNovoUsuario() {
+        var formData = $('#form-adicionar').serialize();
+        $.ajax({
+            url: 'salvar_usuario.php',
+            method: 'POST',
+            data: formData,
+            dataType: 'json',
+            success: function(response) {
+                if (response.success) {
+                    alert('Usuário adicionado com sucesso!');
+                    $('#modal-adicionar').modal('hide');
+                    window.location.reload();
+                } else {
+                    alert('Erro: ' + response.error);
+                }
+            },
+            error: function() {
+                alert('Erro ao salvar usuário.');
+            }
+        });
+    }
+    
+    function salvarEdicaoUsuario() {
+        var formData = $('#form-editar').serialize();
+        $.ajax({
+            url: 'atualizar_usuario.php',
+            method: 'POST',
+            data: formData,
+            dataType: 'json',
+            success: function(response) {
+                if (response.success) {
+                    alert('Usuário atualizado com sucesso!');
+                    $('#modal-editar').modal('hide');
+                    window.location.reload();
+                } else {
+                    alert('Erro: ' + response.error);
+                }
+            },
+            error: function() {
+                alert('Erro ao atualizar usuário.');
+            }
+        });
+    }
+    
+    $(document).ready(function() {
+        $('.ui.dropdown').dropdown();
+    });
 </script>
+
+<style>
+    .ui.mini.buttons .button {
+        padding: 0.5em 1em;
+        font-size: 0.85em;
+        min-width: 70px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+    }
+    .ui.mini.buttons .button i {
+        margin: 0;
+        vertical-align: middle;
+    }
+    .ui.celled.table td.collapsing {
+        padding: 8px 12px;
+        text-align: center;
+    }
+</style>
 
 <?php
 // Incluir rodapé

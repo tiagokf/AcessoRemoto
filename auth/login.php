@@ -8,27 +8,32 @@ require_once '../config/database.php';
 require_once 'auth.php';
 
 // Verificar se o usuário já está logado
-if (isLoggedIn()) {
+if (estaLogado()) {
     header('Location: ../index.php');
     exit;
 }
 
 // Processar o formulário de login
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $email = $_POST['email'] ?? '';
-    $senha = $_POST['senha'] ?? '';
-    
-    // Validar entrada
-    if (empty($email) || empty($senha)) {
-        showAlert('Por favor, preencha todos os campos.', 'negative');
+    if (!validateCsrfToken($_POST['csrf_token'] ?? '')) {
+        showAlert('Falha na validação de segurança. Por favor, tente novamente.', 'negative');
+        // Não prosseguir com o login
     } else {
-        // Autenticar usuário
-        if (autenticarUsuario($email, $senha)) {
-            // Login bem-sucedido, redirecionamento feito dentro da função
-            header('Location: ../index.php');
-            exit;
+        $email = $_POST['email'] ?? '';
+        $senha = $_POST['senha'] ?? '';
+
+        // Validar entrada
+        if (empty($email) || empty($senha)) {
+            showAlert('Por favor, preencha todos os campos.', 'negative');
         } else {
-            showAlert('Email ou senha incorretos.', 'negative');
+            // Autenticar usuário
+            if (autenticarUsuario($email, $senha)) {
+                // Login bem-sucedido, redirecionamento feito dentro da função
+                header('Location: ../index.php');
+                exit;
+            } else {
+                showAlert('Email ou senha incorretos.', 'negative');
+            }
         }
     }
 }
@@ -273,6 +278,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     </div>
                 </div>
                 
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(getCsrfToken()); ?>">
+
                 <button class="ui fluid primary button" type="submit" id="loginBtn">
                     Entrar
                 </button>

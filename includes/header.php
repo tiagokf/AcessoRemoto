@@ -6,7 +6,7 @@ require_once __DIR__ . '/../config/database.php';
 // Verificar se o usuário está logado (exceto na página de login)
 $current_page = basename($_SERVER['PHP_SELF']);
 if ($current_page != 'login.php') {
-    requireLogin();
+    exigirLogin();
 }
 ?>
 <!DOCTYPE html>
@@ -105,9 +105,9 @@ if ($current_page != 'login.php') {
 
         <div class="right menu">
             <div class="item">
-                <?php if (isLoggedIn()): ?>
+                <?php if (estaLogado()): ?>
                 <i class="fas fa-user-circle"></i>
-                <span>Bem-vindo, <?php echo $_SESSION['user_name']; ?></span>
+                <span>Bem-vindo, <?php echo htmlspecialchars($_SESSION['user_name']); ?></span>
                 <?php endif; ?>
             </div>
 

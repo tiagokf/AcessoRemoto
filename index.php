@@ -6,9 +6,10 @@
 require_once 'config/config.php';
 require_once 'config/database.php';
 require_once 'auth/auth.php';
+require_once 'includes/dashboard_functions.php'; // Novo arquivo de funções
 
 // Verificar se o usuário está logado
-if (!isLoggedIn()) {
+if (!estaLogado()) {
     // Redirecionar para a página de login
     header('Location: auth/login.php');
     exit;
@@ -20,80 +21,22 @@ include 'includes/header.php';
 // Incluir sidebar
 include 'includes/sidebar.php';
 
-// Obter estatísticas para o dashboard
-// Total de conexões
-$result = dbQuery("SELECT COUNT(*) as total FROM conexoes");
-$total_conexoes = dbFetchAssoc($result)['total'];
+// Obter estatísticas principais para o dashboard
+$dashboardStats = getDashboardPrincipalStats();
+$total_conexoes = $dashboardStats['total_conexoes'];
+$total_acessos = $dashboardStats['total_acessos'];
+$acessos_hoje = $dashboardStats['acessos_hoje'];
+$total_usuarios = $dashboardStats['total_usuarios'];
 
-// Total de acessos
-$result = dbQuery("SELECT COUNT(*) as total FROM acessos");
-$total_acessos = dbFetchAssoc($result)['total'];
+// Obter dados para o gráfico de acessos recentes
+$recentAccessChartData = getRecentAccessDataForChart();
 
-// Acessos hoje
-$result = dbQuery("SELECT COUNT(*) as total FROM acessos WHERE DATE(data_acesso) = CURDATE()");
-$acessos_hoje = dbFetchAssoc($result)['total'];
+// Obter últimas conexões acessadas
+$ultimas_conexoes = getLastAccessedConnections();
 
-// Total de usuários
-$result = dbQuery("SELECT COUNT(*) as total FROM usuarios");
-$total_usuarios = dbFetchAssoc($result)['total'];
+// Obter dados para o gráfico de tipos de conexão
+$connectionTypesChartData = getConnectionTypesDataForChart();
 
-// Acessos por dia nos últimos 7 dias
-$sql = "SELECT DATE(data_acesso) as data, COUNT(*) as total
-        FROM acessos
-        WHERE data_acesso >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
-        GROUP BY DATE(data_acesso)
-        ORDER BY data";
-$result = dbQuery($sql);
-$acessos_por_dia = dbFetchAll($result);
-
-// Preparar arrays para o gráfico de acessos recentes
-$datas = [];
-$totais = [];
-
-// Preencher com zeros para os dias sem registros
-for ($i = 6; $i >= 0; $i--) {
-    $data = date('Y-m-d', strtotime("-$i days"));
-    $datas[] = date('d/m', strtotime($data));
-    $totais[] = 0;
-    
-    // Verificar se há registros para esta data
-    foreach ($acessos_por_dia as $acesso) {
-        if ($acesso['data'] == $data) {
-            $totais[count($totais) - 1] = intval($acesso['total']);
-            break;
-        }
-    }
-}
-
-// Últimas conexões acessadas
-$sql = "SELECT c.id, c.cliente, c.tipo_acesso_remoto, c.id_acesso_remoto, c.senha_acesso_remoto, c.observacoes, MAX(a.data_acesso) as ultimo_acesso
-        FROM conexoes c
-        LEFT JOIN acessos a ON c.id = a.id_conexao
-        GROUP BY c.id
-        ORDER BY ultimo_acesso DESC
-        LIMIT 5";
-$result = dbQuery($sql);
-$ultimas_conexoes = dbFetchAll($result);
-
-// Tipos de acesso (para gráfico de pizza)
-$sql = "SELECT tipo_acesso_remoto, COUNT(*) as total FROM conexoes GROUP BY tipo_acesso_remoto";
-$result = dbQuery($sql);
-$tipos_acesso = dbFetchAll($result);
-
-// Preparar arrays para o gráfico de tipos de conexão
-$tipos = [];
-$quantidades = [];
-
-foreach ($tipos_acesso as $tipo) {
-    $tipos[] = $tipo['tipo_acesso_remoto'];
-    $quantidades[] = $tipo['total'];
-}
-
-// Se não houver dados, adicionar um placeholder
-if (empty($tipos)) {
-    $tipos[] = 'Sem dados';
-    $quantidades[] = 1;
-}
 ?>
 
 <!-- Conteúdo principal -->
@@ -400,32 +343,11 @@ if (empty($tipos)) {
         // 1. Gráfico de acessos por dia
         const ctxAcessos = document.getElementById('acessosChart').getContext('2d');
         
-        <?php
-        // Preparar arrays para o gráfico
-        $datas = [];
-        $totais = [];
-        
-        // Preencher com zeros para os dias sem registros
-        for ($i = 6; $i >= 0; $i--) {
-            $data = date('Y-m-d', strtotime("-$i days"));
-            $datas[] = date('d/m', strtotime($data));
-            $totais[] = 0;
-            
-            // Verificar se há registros para esta data
-            foreach ($acessos_por_dia as $acesso) {
-                if ($acesso['data'] == $data) {
-                    $totais[count($totais) - 1] = intval($acesso['total']);
-                    break;
-                }
-            }
-        }
-        ?>
-        
         const dataAcessos = {
-            labels: <?php echo json_encode($datas); ?>,
+            labels: <?php echo json_encode($recentAccessChartData['labels']); ?>,
             datasets: [{
                 label: 'Número de Acessos',
-                data: <?php echo json_encode($totais); ?>,
+                data: <?php echo json_encode($recentAccessChartData['data']); ?>,
                 backgroundColor: 'rgba(33, 133, 208, 0.2)',
                 borderColor: 'rgba(33, 133, 208, 1)',
                 borderWidth: 2,
@@ -487,10 +409,10 @@ if (empty($tipos)) {
         const ctxTipos = document.getElementById('tiposChart').getContext('2d');
         
         const dataTipos = {
-            labels: <?php echo json_encode($tipos); ?>,
+            labels: <?php echo json_encode($connectionTypesChartData['labels']); ?>,
             datasets: [{
                 label: 'Quantidade',
-                data: <?php echo json_encode($quantidades); ?>,
+                data: <?php echo json_encode($connectionTypesChartData['data']); ?>,
                 backgroundColor: chartColors,
                 borderColor: chartColors.map(color => color.replace('0.8', '1')),
                 borderWidth: 1,

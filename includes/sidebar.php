@@ -31,14 +31,14 @@ $current_dir = basename(dirname($_SERVER['PHP_SELF']));
         <span>Relatórios</span>
     </a>
     
-    <?php if (isAdmin()): ?>
+    <?php if (ehAdmin()): ?>
     <a href="<?php echo SITE_URL; ?>/modules/usuarios/listar.php" class="item <?php echo ($current_dir == 'usuarios') ? 'active' : ''; ?>">
         <i class="fas fa-users"></i>
         <span>Usuários</span>
     </a>
     <?php endif; ?>
     
-    <?php if (isLoggedIn()): ?>
+    <?php if (estaLogado()): ?>
     <div class="user-info">
         <div class="user-profile">
             <i class="fas fa-user-circle"></i>

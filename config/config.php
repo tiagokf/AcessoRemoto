@@ -14,30 +14,6 @@ if (session_status() == PHP_SESSION_NONE) {
 // Incluir o arquivo de autenticação
 require_once __DIR__ . '/../auth/auth.php';
 
-// Funções de autenticação - wrapper para compatibilidade com os nomes das funções
-function isLoggedIn() {
-    return estaLogado();
-}
-
-function requireLogin() {
-    if (!estaLogado()) {
-        header('Location: ' . SITE_URL . '/auth/login.php');
-        exit;
-    }
-}
-
-function isAdmin() {
-    return isset($_SESSION['nivel_acesso']) && $_SESSION['nivel_acesso'] == 'admin';
-}
-
-function requireAdmin() {
-    requireLogin();
-    if (!isAdmin()) {
-        header('Location: ' . SITE_URL . '/index.php?error=acesso_negado');
-        exit;
-    }
-}
-
 // Função para gerar hash seguro de senha
 function gerarHash($senha) {
     return password_hash($senha, PASSWORD_BCRYPT);
@@ -74,10 +50,51 @@ function showAlert($message, $type = 'info') {
 function displayAlert() {
     if (isset($_SESSION['alert'])) {
         $alert = $_SESSION['alert'];
-        echo '<div class="ui ' . $alert['type'] . ' message">';
-        echo $alert['message'];
+        // Garantir que $alert['type'] seja seguro para classes CSS (alfanumérico)
+        $type = preg_replace('/[^a-zA-Z0-9-]/', '', $alert['type'] ?? 'info');
+        echo '<div class="ui ' . $type . ' message">';
+        echo htmlspecialchars($alert['message'] ?? ''); // Escapar a mensagem aqui
         echo '</div>';
         unset($_SESSION['alert']);
     }
 }
+
+// Funções CSRF
+function generateCsrfToken() {
+    if (session_status() == PHP_SESSION_NONE) {
+        session_start(); // Garantir que a sessão esteja ativa
+    }
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+
+function getCsrfToken() {
+    if (session_status() == PHP_SESSION_NONE) {
+        session_start(); // Garantir que a sessão esteja ativa
+    }
+    // Gera o token se não existir ao tentar obter
+    if (empty($_SESSION['csrf_token'])) {
+        generateCsrfToken();
+    }
+    return $_SESSION['csrf_token'];
+}
+
+function validateCsrfToken($token_from_form) {
+    if (session_status() == PHP_SESSION_NONE) {
+        session_start(); // Garantir que a sessão esteja ativa
+    }
+    if (!empty($token_from_form) && !empty($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token_from_form)) {
+        return true;
+    }
+    // Log CSRF failure attempt
+    error_log("CSRF token validation failed. Form token: " . $token_from_form . " Session token: " . ($_SESSION['csrf_token'] ?? 'Not Set'));
+    // Invalidar o token atual para forçar a regeneração e evitar replay attacks com o token antigo da sessão
+    unset($_SESSION['csrf_token']);
+    return false;
+}
+
+// Gera o token uma vez por carregamento de config, se não existir, ou se foi invalidado.
+generateCsrfToken();
 ?>

@@ -7,7 +7,7 @@ require_once '../../config/config.php';
 require_once '../../config/database.php';
 
 // Verificar se o usuário é administrador
-requireAdmin();
+exigirAdmin();
 
 // Verificar se o ID foi informado
 if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {

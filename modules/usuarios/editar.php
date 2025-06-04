@@ -6,27 +6,27 @@
 require_once '../../config/config.php';
 require_once '../../config/database.php';
 
-// Verificar se o usuário é administrador
-exigirAdmin();
+// Verificar se o usuário está logado (qualquer usuário logado pode editar seu perfil)
+exigirLogin();
 
-// Verificar se o ID foi informado
-if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
-    showAlert('ID inválido', 'negative');
-    header('Location: listar.php');
-    exit;
+$id = $_SESSION['user_id']; // Usuário só pode editar seu próprio perfil
+
+// Obter dados do usuário logado
+// Selecionar apenas os campos necessários e não sensíveis para preencher o formulário
+$sql_get_user = "SELECT id, nome, email, nivel_acesso FROM usuarios WHERE id = ?";
+$result_get_user = dbQueryPrepared($sql_get_user, [$id], "i");
+
+$usuario = null;
+if ($result_get_user && $result_get_user->num_rows > 0) {
+    $usuario = dbFetchAssoc($result_get_user);
+} else {
+    // Se não encontrar o usuário da sessão no DB (improvável, mas defensivo)
+    showAlert('Erro ao carregar dados do usuário. Por favor, tente logar novamente.', 'negative');
+    // Destruir sessão e redirecionar para login pode ser uma opção aqui
+    // session_destroy(); header('Location: ' . SITE_URL . '/auth/login.php'); exit;
+    // Por agora, apenas mostra o erro e impede a renderização do formulário mais abaixo.
 }
 
-$id = intval($_GET['id']);
-
-// Obter dados do usuário
-$result = dbQuery("SELECT * FROM usuarios WHERE id = $id");
-if ($result->num_rows == 0) {
-    showAlert('Usuário não encontrado', 'negative');
-    header('Location: listar.php');
-    exit;
-}
-
-$usuario = dbFetchAssoc($result);
 
 // Incluir cabeçalho
 include '../../includes/header.php';
@@ -36,79 +36,111 @@ include '../../includes/sidebar.php';
 
 // Processar o formulário, se enviado
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    // Obter dados do formulário
-    $nome = isset($_POST['nome']) ? dbEscape($_POST['nome']) : '';
-    $email = isset($_POST['email']) ? dbEscape($_POST['email']) : '';
-    $senha = isset($_POST['senha']) ? $_POST['senha'] : '';
-    $confirmar_senha = isset($_POST['confirmar_senha']) ? $_POST['confirmar_senha'] : '';
-    $nivel_acesso = isset($_POST['nivel_acesso']) ? dbEscape($_POST['nivel_acesso']) : 'usuario';
-    
-    // Validar campos obrigatórios
-    if (empty($nome) || empty($email)) {
-        showAlert('Nome e e-mail são obrigatórios', 'negative');
+    // O ID do usuário a ser editado é sempre o da sessão.
+    $editing_user_id = $_SESSION['user_id'];
+
+    if (!validateCsrfToken($_POST['csrf_token'] ?? '')) {
+        showAlert('Falha na validação de segurança (CSRF). Por favor, tente novamente.', 'negative');
     } else {
-        // Verificar se o e-mail já existe (exceto para o próprio usuário)
-        $sql = "SELECT * FROM usuarios WHERE email = '$email' AND id != $id";
-        $result = dbQuery($sql);
+        // Obter dados do formulário
+        $nome = trim($_POST['nome'] ?? '');
+        $email = trim($_POST['email'] ?? '');
+        $senha = $_POST['senha'] ?? ''; // Senha não é trimada antes da validação de comprimento
+        $confirmar_senha = $_POST['confirmar_senha'] ?? '';
+        // Nível de acesso não é pego do POST, pois não deve ser editável pelo usuário aqui.
         
-        if ($result->num_rows > 0) {
-            showAlert('Este e-mail já está sendo utilizado por outro usuário', 'negative');
-        } else {
-            // Verificar se está tentando alterar o nível do último administrador
-            if ($usuario['nivel_acesso'] == 'admin' && $nivel_acesso != 'admin') {
-                $result = dbQuery("SELECT COUNT(*) as total FROM usuarios WHERE nivel_acesso = 'admin'");
-                $row = dbFetchAssoc($result);
-                
-                if ($row['total'] <= 1) {
-                    showAlert('Não é possível rebaixar o último administrador do sistema.', 'negative');
-                    $atualizar = false;
-                } else {
-                    $atualizar = true;
-                }
-            } else {
-                $atualizar = true;
-            }
-            
-            if ($atualizar) {
-                // Construir a consulta SQL
-                $sql = "UPDATE usuarios SET nome = '$nome', email = '$email', nivel_acesso = '$nivel_acesso'";
-                
-                // Só atualiza a senha se uma nova for fornecida
-                if (!empty($senha)) {
-                    if ($senha != $confirmar_senha) {
-                        showAlert('As senhas não conferem', 'negative');
-                        $atualizar = false;
-                    } elseif (strlen($senha) < 6) {
-                        showAlert('A senha deve ter pelo menos 6 caracteres', 'negative');
-                        $atualizar = false;
-                    } else {
-                        $senha_hash = gerarHash($senha);
-                        $sql .= ", senha = '$senha_hash'";
-                    }
-                }
-                
-                if ($atualizar) {
-                    $sql .= " WHERE id = $id";
-                    
-                    if (dbQuery($sql)) {
-                        showAlert('Usuário atualizado com sucesso!', 'positive');
-                        // Atualizar os dados na sessão se for o usuário atual
-                        if ($id == $_SESSION['user_id']) {
-                            $_SESSION['user_name'] = $nome;
-                            $_SESSION['user_email'] = $email;
-                            $_SESSION['nivel_acesso'] = $nivel_acesso;
-                        }
-                        
-                        // Recarregar dados atualizados
-                        $result = dbQuery("SELECT * FROM usuarios WHERE id = $id");
-                        $usuario = dbFetchAssoc($result);
-                    } else {
-                        showAlert('Erro ao atualizar usuário', 'negative');
-                    }
-                }
+        $proceed_to_save = true; // Flag para controlar o fluxo de salvamento
+
+        // Validar campos obrigatórios
+        if (empty($nome) || empty($email)) {
+            showAlert('Nome e e-mail são obrigatórios', 'negative');
+            $proceed_to_save = false;
+        }
+
+        // Validar formato de e-mail
+        if ($proceed_to_save && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            showAlert('Formato de e-mail inválido.', 'negative');
+            $proceed_to_save = false;
+        }
+
+        // Validar comprimento do nome e email
+        if ($proceed_to_save && mb_strlen($nome) > 255) {
+            showAlert('O nome não pode exceder 255 caracteres.', 'negative');
+            $proceed_to_save = false;
+        }
+        if ($proceed_to_save && mb_strlen($email) > 255) {
+            showAlert('O e-mail não pode exceder 255 caracteres.', 'negative');
+            $proceed_to_save = false;
+        }
+
+        // Validações de senha (apenas se a senha foi fornecida)
+        if ($proceed_to_save && !empty($senha)) {
+            if ($senha != $confirmar_senha) {
+                showAlert('As senhas não conferem', 'negative');
+                $proceed_to_save = false;
+            } elseif (strlen($senha) < 6) {
+                showAlert('A senha deve ter pelo menos 6 caracteres', 'negative');
+                $proceed_to_save = false;
             }
         }
-    }
+
+        if ($proceed_to_save) {
+            // Verificar se o e-mail já existe (exceto para o próprio usuário)
+            $sql_check_email = "SELECT id FROM usuarios WHERE email = ? AND id != ?";
+            // $editing_user_id is $_SESSION['user_id']
+            $result_check_email = dbQueryPrepared($sql_check_email, [$email, $editing_user_id], "si");
+
+            if ($result_check_email === false) {
+                showAlert('Ocorreu um erro ao verificar o e-mail. Por favor, tente novamente.', 'negative');
+                $proceed_to_save = false;
+            } elseif ($result_check_email && $result_check_email->num_rows > 0) {
+                showAlert('Este e-mail já está sendo utilizado por outro usuário.', 'negative');
+                $proceed_to_save = false;
+            }
+        }
+
+        // Removida a verificação de "último administrador" pois usuário não edita seu nível aqui.
+            
+        if ($proceed_to_save) {
+            // Construir a consulta SQL - usuário não pode mudar seu nivel_acesso aqui
+            $sql_update_user = "UPDATE usuarios SET nome = ?, email = ?";
+            $params_update_user = [$nome, $email];
+            $types_update_user = "ss";
+
+            if (!empty($senha)) { // A validação da senha (match, length) já ocorreu antes
+                $senha_hash = gerarHash($senha);
+                $sql_update_user .= ", senha = ?";
+                $params_update_user[] = $senha_hash;
+                $types_update_user .= "s";
+            }
+
+            $sql_update_user .= " WHERE id = ?";
+            $params_update_user[] = $editing_user_id; // Sempre o ID da sessão
+            $types_update_user .= "i";
+
+            $update_result = dbQueryPrepared($sql_update_user, $params_update_user, $types_update_user);
+
+            if ($update_result) {
+                showAlert('Perfil atualizado com sucesso!', 'positive');
+                // Atualizar dados da sessão
+                $_SESSION['user_name'] = $nome;
+                $_SESSION['user_email'] = $email;
+                // $_SESSION['nivel_acesso'] não muda aqui.
+                
+                // Recarregar dados atualizados para exibir no formulário
+                // Usar $editing_user_id que é o $_SESSION['user_id']
+                $sql_reload_user = "SELECT id, nome, email, nivel_acesso FROM usuarios WHERE id = ?";
+                $result_reload_user = dbQueryPrepared($sql_reload_user, [$editing_user_id], "i");
+                if ($result_reload_user && $result_reload_user->num_rows > 0) {
+                    $usuario = dbFetchAssoc($result_reload_user); // Atualiza $usuario para o formulário
+                } else {
+                     showAlert('Ocorreu um erro ao recarregar os dados do usuário após a atualização.', 'warning');
+                }
+            } else {
+                showAlert('Erro ao atualizar o perfil. Tente novamente.', 'negative');
+            }
+        }
+    } // Encerra o else do CSRF
 }
 ?>
 
@@ -124,17 +156,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     
     <div class="ui divider"></div>
     
+    <?php if ($usuario === null): ?>
+        <div class="ui error message">
+            Não foi possível carregar os dados do usuário. Verifique os logs para mais detalhes ou tente novamente mais tarde.
+        </div>
+    <?php else: ?>
     <!-- Formulário de edição -->
     <div class="ui segment">
         <form class="ui form" method="POST" action="">
             <div class="two fields">
                 <div class="required field">
                     <label>Nome</label>
-                    <input type="text" name="nome" placeholder="Nome completo" value="<?php echo htmlspecialchars($usuario['nome']); ?>" required>
+                    <input type="text" name="nome" placeholder="Nome completo" value="<?php echo htmlspecialchars($usuario['nome'] ?? ''); ?>" required>
                 </div>
                 <div class="required field">
                     <label>E-mail</label>
-                    <input type="email" name="email" placeholder="E-mail" value="<?php echo htmlspecialchars($usuario['email']); ?>" required>
+                    <input type="email" name="email" placeholder="E-mail" value="<?php echo htmlspecialchars($usuario['email'] ?? ''); ?>" required>
                 </div>
             </div>
             
@@ -152,12 +189,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             
             <div class="field">
                 <label>Nível de Acesso</label>
-                <select class="ui dropdown" name="nivel_acesso">
-                    <option value="usuario" <?php echo ($usuario['nivel_acesso'] == 'usuario') ? 'selected' : ''; ?>>Usuário</option>
-                    <option value="admin" <?php echo ($usuario['nivel_acesso'] == 'admin') ? 'selected' : ''; ?>>Administrador</option>
-                </select>
+                <input type="text" readonly value="<?php echo htmlspecialchars(ucfirst($usuario['nivel_acesso'] ?? '')); ?>"
+                       class="ui disabled input" title="Nível de acesso não pode ser alterado nesta página.">
+                <!-- <select class="ui dropdown" name="nivel_acesso" disabled>
+                    <option value="usuario" <?php //echo (($usuario['nivel_acesso'] ?? 'usuario') == 'usuario') ? 'selected' : ''; ?>>Usuário</option>
+                    <option value="admin" <?php //echo (($usuario['nivel_acesso'] ?? 'usuario') == 'admin') ? 'selected' : ''; ?>>Administrador</option>
+                </select> -->
             </div>
             
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(getCsrfToken()); ?>">
+
             <div class="ui hidden divider"></div>
             
             <div class="ui buttons">
@@ -167,6 +208,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             </div>
         </form>
     </div>
+    <?php endif; ?> <!-- Encerra o else do if ($usuario === null) -->
 </div>
 
 <script>

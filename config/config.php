@@ -7,6 +7,16 @@ define('SITE_NAME', 'Sistema de Acesso Remoto');
 define('SITE_URL', 'http://localhost:8092');
 
 // Configuração de sessão
+$cookieParams = session_get_cookie_params();
+session_set_cookie_params([
+    'lifetime' => $cookieParams['lifetime'],
+    'path' => $cookieParams['path'],
+    'domain' => $cookieParams['domain'],
+    'secure' => true, // Definir como true; garantir que HTTPS seja usado em produção
+    'httponly' => true,
+    'samesite' => 'Lax'
+]);
+
 if (session_status() == PHP_SESSION_NONE) {
     session_start();
 }

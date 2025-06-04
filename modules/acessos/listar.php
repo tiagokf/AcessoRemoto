@@ -14,9 +14,12 @@ if (isset($_GET['excluir']) && is_numeric($_GET['excluir'])) {
     $id = intval($_GET['excluir']);
     
     // Excluir o acesso
-    $result = dbQuery("DELETE FROM acessos WHERE id = $id");
+    $result = dbQueryPrepared("DELETE FROM acessos WHERE id = ?", [$id], "i");
     
-    if ($result) {
+    if ($result) { // dbQueryPrepared returns true on successful DML if no result set, or a result object
+        // For DELETE, check affected rows if dbQueryPrepared was adapted to return it,
+        // or assume success if it doesn't return false.
+        // For now, we assume if it's not false, it worked.
         showAlert('Registro de acesso excluído com sucesso!', 'positive');
     } else {
         showAlert('Erro ao excluir registro de acesso.', 'negative');
@@ -44,51 +47,74 @@ $pagina = isset($_GET['pagina']) ? intval($_GET['pagina']) : 1;
 $limite = 20;
 $offset = ($pagina - 1) * $limite;
 
-// Construir cláusula WHERE para filtros
-$whereClause = "WHERE a.data_acesso BETWEEN '$data_inicio 00:00:00' AND '$data_fim 23:59:59'";
+// Construir cláusula WHERE para filtros e parâmetros para prepared statements
+$conditions = [];
+$params = [];
+$types = "";
+
+// Filtro de data (obrigatório)
+$conditions[] = "a.data_acesso BETWEEN ? AND ?";
+$params[] = $data_inicio . " 00:00:00";
+$params[] = $data_fim . " 23:59:59";
+$types .= "ss";
 
 if (!empty($cliente)) {
-    $whereClause .= " AND c.cliente LIKE '%$cliente%'";
+    $conditions[] = "c.cliente LIKE ?";
+    $params[] = "%" . $cliente . "%";
+    $types .= "s";
 }
 
-if (!empty($usuario)) {
-    $whereClause .= " AND u.nome LIKE '%$usuario%'";
+if (ehAdmin() && !empty($usuario)) {
+    $conditions[] = "u.nome LIKE ?";
+    $params[] = "%" . $usuario . "%";
+    $types .= "s";
+} elseif (!ehAdmin()) {
+    $conditions[] = "a.id_usuario = ?";
+    $params[] = $_SESSION['user_id'];
+    $types .= "i";
 }
 
-// Se não for admin, mostrar apenas os acessos do próprio usuário
-if (!ehAdmin()) {
-    $id_usuario = $_SESSION['user_id'];
-    $whereClause .= " AND a.id_usuario = $id_usuario";
+$whereClause = "";
+if (!empty($conditions)) {
+    $whereClause = "WHERE " . implode(" AND ", $conditions);
 }
 
 // Consulta para obter os acessos
+$sqlBase = "FROM acessos a
+            JOIN conexoes c ON a.id_conexao = c.id
+            JOIN usuarios u ON a.id_usuario = u.id
+            $whereClause";
+
 $sql = "SELECT a.*, c.cliente, c.tipo_acesso_remoto, u.nome as usuario_nome 
-        FROM acessos a 
-        JOIN conexoes c ON a.id_conexao = c.id 
-        JOIN usuarios u ON a.id_usuario = u.id 
-        $whereClause 
+        $sqlBase
         ORDER BY a.data_acesso DESC 
-        LIMIT $limite OFFSET $offset";
-$result = dbQuery($sql);
-$acessos = dbFetchAll($result);
+        LIMIT ? OFFSET ?";
+$paramsWithPagination = array_merge($params, [$limite, $offset]);
+$typesWithPagination = $types . "ii";
+
+$result = dbQueryPrepared($sql, $paramsWithPagination, $typesWithPagination);
+$acessos = $result ? dbFetchAll($result) : [];
 
 // Obter o total de registros para a paginação
-$sqlTotal = "SELECT COUNT(*) as total 
-            FROM acessos a 
-            JOIN conexoes c ON a.id_conexao = c.id 
-            JOIN usuarios u ON a.id_usuario = u.id 
-            $whereClause";
-$resultTotal = dbQuery($sqlTotal);
-$rowTotal = dbFetchAssoc($resultTotal);
-$totalRegistros = $rowTotal['total'];
+$sqlTotal = "SELECT COUNT(*) as total $sqlBase";
+$resultTotal = dbQueryPrepared($sqlTotal, $params, $types); // Usa os mesmos params e types do WHERE clause
+$totalRegistros = 0;
+if ($resultTotal) {
+    $rowTotal = dbFetchAssoc($resultTotal);
+    if ($rowTotal) {
+        $totalRegistros = $rowTotal['total'];
+    }
+}
 $totalPaginas = ceil($totalRegistros / $limite);
 
 // Obter lista de usuários para o filtro (apenas para admins)
 $usuarios = [];
 if (ehAdmin()) {
-    $sql = "SELECT id, nome FROM usuarios ORDER BY nome";
-    $result = dbQuery($sql);
-    $usuarios = dbFetchAll($result);
+    $sqlUsers = "SELECT id, nome FROM usuarios ORDER BY nome";
+    $resultUsers = dbQueryPrepared($sqlUsers, [], "");
+    if ($resultUsers) {
+        $usuarios = dbFetchAll($resultUsers);
+    }
 }
 ?>
 
@@ -171,7 +197,27 @@ if (ehAdmin()) {
                     <tr>
                         <td><?php echo date('d/m/Y H:i:s', strtotime($acesso['data_acesso'])); ?></td>
                         <td><?php echo htmlspecialchars($acesso['cliente']); ?></td>
-                        <td><?php echo htmlspecialchars($acesso['tipo_acesso_remoto']); ?></td>
+                        <td>
+                            <span class="ui label" style="
+                                padding: 4px 8px;
+                                font-size: 0.85em;
+                                background-color: <?php
+                                switch(htmlspecialchars($acesso['tipo_acesso_remoto'] ?? '')) {
+                                    case 'AnyDesk': echo '#ef443b'; break;
+                                    case 'TeamViewer': echo '#1a68d6'; break;
+                                    case 'RDP': echo '#2c82c9'; break;
+                                    case 'VPN': echo '#27ae60'; break;
+                                    case 'SSH': echo '#333333'; break;
+                                    case 'RustDesk': echo '#4d4d4d'; break;
+                                    case 'Supremo': echo '#7928CA'; break;
+                                    default: echo '#7f8c8d'; break;
+                                }
+                                ?>;
+                                color: white;"
+                            >
+                                <?php echo htmlspecialchars($acesso['tipo_acesso_remoto']); ?>
+                            </span>
+                        </td>
                         <?php if (ehAdmin()): ?>
                         <td><?php echo htmlspecialchars($acesso['usuario_nome']); ?></td>
                         <?php endif; ?>

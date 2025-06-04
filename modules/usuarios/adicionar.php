@@ -21,40 +21,84 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         showAlert('Falha na validação de segurança. Por favor, tente novamente.', 'negative');
     } else {
         // Obter dados do formulário
-        $nome = isset($_POST['nome']) ? dbEscape($_POST['nome']) : '';
-        $email = isset($_POST['email']) ? dbEscape($_POST['email']) : '';
-    $senha = isset($_POST['senha']) ? $_POST['senha'] : '';
-    $confirmar_senha = isset($_POST['confirmar_senha']) ? $_POST['confirmar_senha'] : '';
-    $nivel_acesso = isset($_POST['nivel_acesso']) ? dbEscape($_POST['nivel_acesso']) : 'usuario';
-    
-    // Validar campos obrigatórios
-    if (empty($nome) || empty($email) || empty($senha)) {
-        showAlert('Todos os campos são obrigatórios', 'negative');
-    } elseif ($senha != $confirmar_senha) {
-        showAlert('As senhas não conferem', 'negative');
-    } elseif (strlen($senha) < 6) {
-        showAlert('A senha deve ter pelo menos 6 caracteres', 'negative');
-    } else {
-        // Verificar se o e-mail já existe
-        $sql = "SELECT * FROM usuarios WHERE email = '$email'";
-        $result = dbQuery($sql);
+        $nome = trim($_POST['nome'] ?? ''); // Trim para remover espaços extras
+        $email = trim($_POST['email'] ?? '');
+        $senha = $_POST['senha'] ?? ''; // Senha não precisa de trim ou dbEscape
+        $confirmar_senha = $_POST['confirmar_senha'] ?? '';
+        $nivel_acesso = trim($_POST['nivel_acesso'] ?? 'usuario'); // Trim para remover espaços extras
         
-        if ($result->num_rows > 0) {
-            showAlert('Este e-mail já está cadastrado', 'negative');
-        } else {
-            // Gerar hash da senha
-            $senha_hash = gerarHash($senha);
+        $valid_data = true; // Flag para controlar o fluxo
+
+        // Validar campos obrigatórios
+        if (empty($nome) || empty($email) || empty($senha)) {
+            showAlert('Todos os campos são obrigatórios', 'negative');
+            $valid_data = false;
+        }
+
+        // Validar formato de e-mail
+        if ($valid_data && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            showAlert('Formato de e-mail inválido.', 'negative');
+            $valid_data = false;
+        }
+
+        // Validar comprimento do nome e email
+        if ($valid_data && mb_strlen($nome) > 255) {
+            showAlert('O nome não pode exceder 255 caracteres.', 'negative');
+            $valid_data = false;
+        }
+        if ($valid_data && mb_strlen($email) > 255) {
+            showAlert('O e-mail não pode exceder 255 caracteres.', 'negative');
+            $valid_data = false;
+        }
+
+        // Validar nível de acesso
+        $allowed_levels = ['usuario', 'admin'];
+        if ($valid_data && !in_array($nivel_acesso, $allowed_levels)) {
+            showAlert('Nível de acesso inválido.', 'negative');
+            $valid_data = false;
+        }
+
+        // Validar senha
+        if ($valid_data && $senha != $confirmar_senha) {
+            showAlert('As senhas não conferem', 'negative');
+            $valid_data = false;
+        }
+        if ($valid_data && strlen($senha) < 6) {
+            showAlert('A senha deve ter pelo menos 6 caracteres', 'negative');
+            $valid_data = false;
+        }
+
+        if ($valid_data) {
+            // Verificar se o e-mail já existe
+            $sql_check_email = "SELECT id FROM usuarios WHERE email = ?";
+            $result_check_email = dbQueryPrepared($sql_check_email, [$email], "s");
+
+            if ($result_check_email === false) {
+                showAlert('Ocorreu um erro ao processar sua solicitação. Por favor, tente novamente mais tarde.', 'negative');
+                $valid_data = false; // Impede a continuação
+            } elseif ($result_check_email && $result_check_email->num_rows > 0) {
+                showAlert('Este e-mail já está cadastrado', 'negative');
+                $valid_data = false; // Impede a continuação
+            }
             
-            // Inserir no banco de dados
-            $sql = "INSERT INTO usuarios (nome, email, senha, nivel_acesso) 
-                    VALUES ('$nome', '$email', '$senha_hash', '$nivel_acesso')";
-            
-            if (dbQuery($sql)) {
-                showAlert('Usuário adicionado com sucesso!', 'positive');
-                // Redirecionar após um breve atraso (para mostrar a mensagem)
-                echo "<script>setTimeout(function(){ window.location.href = 'listar.php'; }, 1500);</script>";
-            } else {
-                showAlert('Erro ao adicionar usuário', 'negative');
+            if ($valid_data) { // Re-checar $valid_data antes de prosseguir
+                // Gerar hash da senha
+                $senha_hash = gerarHash($senha);
+
+                // Inserir no banco de dados
+                $sql_insert_user = "INSERT INTO usuarios (nome, email, senha, nivel_acesso)
+                                    VALUES (?, ?, ?, ?)";
+                $params_insert_user = [$nome, $email, $senha_hash, $nivel_acesso];
+                $types_insert_user = "ssss";
+
+                $insert_result = dbQueryPrepared($sql_insert_user, $params_insert_user, $types_insert_user);
+
+                if ($insert_result) {
+                    showAlert('Usuário adicionado com sucesso!', 'positive');
+                    // Redirecionar após um breve atraso (para mostrar a mensagem)
+                    echo "<script>setTimeout(function(){ window.location.href = 'listar.php'; }, 1500);</script>";
+                } else {
+                    showAlert('Ocorreu um erro ao processar sua solicitação. Por favor, tente novamente mais tarde.', 'negative');
             }
         }
     }

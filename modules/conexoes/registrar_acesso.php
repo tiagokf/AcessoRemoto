@@ -21,16 +21,18 @@ if (!isset($_POST['id_conexao']) || !is_numeric($_POST['id_conexao'])) {
 }
 
 $id_conexao = intval($_POST['id_conexao']);
-$detalhes = isset($_POST['detalhes']) ? dbEscape($_POST['detalhes']) : '';
+$detalhes = $_POST['detalhes'] ?? ''; // Removido dbEscape, será tratado por prepared statement
 
 // Registrar o acesso
 $id_usuario = $_SESSION['user_id'];
 $ip = $_SERVER['REMOTE_ADDR'];
 
 $sql = "INSERT INTO acessos (id_conexao, id_usuario, ip_acesso, detalhes) 
-        VALUES ($id_conexao, $id_usuario, '$ip', '$detalhes')";
+        VALUES (?, ?, ?, ?)";
+$params = [$id_conexao, $id_usuario, $ip, $detalhes];
+$types = "iiss"; // i para integer, s para string
 
-if (dbQuery($sql)) {
+if (dbQueryPrepared($sql, $params, $types)) {
     header('Content-Type: application/json');
     echo json_encode(['success' => true, 'message' => 'Acesso registrado com sucesso']);
 } else {

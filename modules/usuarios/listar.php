@@ -24,58 +24,110 @@ if (isset($_GET['excluir']) && is_numeric($_GET['excluir'])) {
         showAlert('Você não pode excluir seu próprio usuário.', 'negative');
     } else {
         // Verificar se é o último administrador
-        if ($_SESSION['nivel_acesso'] == 'admin') {
-            $result = dbQuery("SELECT COUNT(*) as total FROM usuarios WHERE nivel_acesso = 'admin'");
-            $row = dbFetchAssoc($result);
-            
-            $result_user = dbQuery("SELECT nivel_acesso FROM usuarios WHERE id = $id");
-            $user_row = dbFetchAssoc($result_user);
-            
-            if ($row['total'] <= 1 && $user_row['nivel_acesso'] == 'admin') {
-                showAlert('Não é possível excluir o último administrador do sistema.', 'negative');
-            } else {
-                // Verificar se há acessos vinculados
-                $result = dbQuery("SELECT COUNT(*) as total FROM acessos WHERE id_usuario = $id");
-                $row = dbFetchAssoc($result);
-                
-                if ($row['total'] > 0) {
-                    showAlert('Não é possível excluir este usuário pois existem acessos vinculados a ele.', 'negative');
-                } else {
-                    // Excluir o usuário
-                    dbQuery("DELETE FROM usuarios WHERE id = $id");
-                    showAlert('Usuário excluído com sucesso!', 'positive');
+        // Esta lógica só precisa ser verificada se o usuário atual é admin E o usuário a ser excluído é admin.
+        // Primeiro, pegar o nível de acesso do usuário a ser excluído
+        $sql_user_level = "SELECT nivel_acesso FROM usuarios WHERE id = ?";
+        $result_user_level = dbQueryPrepared($sql_user_level, [$id], "i");
+        $user_to_delete_level = null;
+        if ($result_user_level) {
+            $user_row = dbFetchAssoc($result_user_level);
+            if ($user_row) {
+                $user_to_delete_level = $user_row['nivel_acesso'];
+            }
+        }
+
+        if ($user_to_delete_level === 'admin') {
+            $sql_admin_count = "SELECT COUNT(*) as total FROM usuarios WHERE nivel_acesso = ?";
+            $result_admin_count = dbQueryPrepared($sql_admin_count, ['admin'], "s");
+            $admin_count = 0;
+            if ($result_admin_count) {
+                $row_admin_count = dbFetchAssoc($result_admin_count);
+                if ($row_admin_count) {
+                    $admin_count = $row_admin_count['total'];
                 }
             }
+
+            if ($admin_count <= 1) {
+                showAlert('Não é possível excluir o último administrador do sistema.', 'negative');
+            } else {
+                // Prossiga para outras verificações se não for o último admin
+                deleteUserChecksAndExecution($id);
+            }
+        } else {
+            // Se o usuário a ser excluído não é admin, prossiga com as outras verificações
+            deleteUserChecksAndExecution($id);
+        }
+    }
+}
+
+// Função auxiliar para verificações e exclusão de usuário não-admin ou não-último-admin
+function deleteUserChecksAndExecution($userId) {
+    // Verificar se há acessos vinculados
+    $sql_access_count = "SELECT COUNT(*) as total FROM acessos WHERE id_usuario = ?";
+    $result_access_count = dbQueryPrepared($sql_access_count, [$userId], "i");
+    $access_count = 0;
+    if ($result_access_count) {
+        $row_access_count = dbFetchAssoc($result_access_count);
+        if ($row_access_count) {
+            $access_count = $row_access_count['total'];
+        }
+    }
+
+    if ($access_count > 0) {
+        showAlert('Não é possível excluir este usuário pois existem acessos vinculados a ele.', 'negative');
+    } else {
+        // Excluir o usuário
+        $sql_delete_user = "DELETE FROM usuarios WHERE id = ?";
+        $result_delete = dbQueryPrepared($sql_delete_user, [$userId], "i");
+        if ($result_delete) { // Assumindo que dbQueryPrepared retorna true ou um objeto com affected_rows > 0 para sucesso
+            showAlert('Usuário excluído com sucesso!', 'positive');
+        } else {
+            showAlert('Erro ao excluir o usuário.', 'negative');
         }
     }
 }
 
 // Configuração de busca e paginação
-$busca = isset($_GET['busca']) ? dbEscape($_GET['busca']) : '';
+// $busca = isset($_GET['busca']) ? trim($_GET['busca']) : ''; // Trim e remover dbEscape // Esta linha é duplicada abaixo
 $pagina = isset($_GET['pagina']) ? intval($_GET['pagina']) : 1;
 $limite = 10;
 $offset = ($pagina - 1) * $limite;
 
-// Construir a consulta SQL
-$whereClause = '';
+// Construir a consulta SQL e parâmetros
+$params = [];
+$types = "";
+$whereClauseSQL = "";
+
 if (!empty($busca)) {
-    $whereClause = " WHERE nome LIKE '%$busca%' OR email LIKE '%$busca%'";
+    $whereClauseSQL = " WHERE nome LIKE ? OR email LIKE ?";
+    $params[] = "%" . $busca . "%";
+    $params[] = "%" . $busca . "%";
+    $types .= "ss";
 }
 
-$sql = "SELECT * FROM usuarios $whereClause ORDER BY nome ASC LIMIT $limite OFFSET $offset";
-$result = dbQuery($sql);
-$usuarios = dbFetchAll($result);
+// Consulta para obter os usuários
+$sql = "SELECT * FROM usuarios $whereClauseSQL ORDER BY nome ASC LIMIT ? OFFSET ?";
+$paramsWithPagination = array_merge($params, [$limite, $offset]);
+$typesWithPagination = $types . "ii";
+$result = dbQueryPrepared($sql, $paramsWithPagination, $typesWithPagination);
+$usuarios = $result ? dbFetchAll($result) : [];
 
 // Obter o total de registros para a paginação
-$sqlTotal = "SELECT COUNT(*) as total FROM usuarios $whereClause";
-$resultTotal = dbQuery($sqlTotal);
-$rowTotal = dbFetchAssoc($resultTotal);
-$totalRegistros = $rowTotal['total'];
+$sqlTotal = "SELECT COUNT(*) as total FROM usuarios $whereClauseSQL";
+$resultTotal = dbQueryPrepared($sqlTotal, $params, $types); // Usa os mesmos params e types do WHERE
+$totalRegistros = 0;
+if ($resultTotal) {
+    $rowTotal = dbFetchAssoc($resultTotal);
+    if ($rowTotal) {
+        $totalRegistros = $rowTotal['total'];
+    }
+}
 $totalPaginas = ceil($totalRegistros / $limite);
 ?>
 
 <!-- Conteúdo principal -->
 <div class="main-content">
+    <input type="hidden" id="csrf_token_value" value="<?php echo htmlspecialchars(getCsrfToken()); ?>">
     <h1 class="ui header">
         <i class="users icon"></i>
         <div class="content">
@@ -333,7 +385,10 @@ $totalPaginas = ceil($totalRegistros / $limite);
     }
     
     function salvarNovoUsuario() {
-        var formData = $('#form-adicionar').serialize();
+        var formData = $('#form-adicionar').serializeArray(); // Use serializeArray to easily add token
+        var csrfToken = $('#csrf_token_value').val();
+        formData.push({name: "csrf_token", value: csrfToken});
+
         $.ajax({
             url: 'salvar_usuario.php',
             method: 'POST',
@@ -341,21 +396,23 @@ $totalPaginas = ceil($totalRegistros / $limite);
             dataType: 'json',
             success: function(response) {
                 if (response.success) {
-                    alert('Usuário adicionado com sucesso!');
+                    $('body').toast({ class: 'success', message: 'Usuário adicionado com sucesso!', displayTime: 2000, onHide: function() { window.location.reload(); } });
                     $('#modal-adicionar').modal('hide');
-                    window.location.reload();
                 } else {
-                    alert('Erro: ' + response.error);
+                    $('body').toast({ class: 'error', message: 'Erro: ' + (response.error || 'Erro desconhecido.') });
                 }
             },
             error: function() {
-                alert('Erro ao salvar usuário.');
+                $('body').toast({ class: 'error', message: 'Erro de comunicação ao salvar usuário.' });
             }
         });
     }
     
     function salvarEdicaoUsuario() {
-        var formData = $('#form-editar').serialize();
+        var formData = $('#form-editar').serializeArray(); // Use serializeArray to easily add token
+        var csrfToken = $('#csrf_token_value').val();
+        formData.push({name: "csrf_token", value: csrfToken});
+
         $.ajax({
             url: 'atualizar_usuario.php',
             method: 'POST',
@@ -363,15 +420,14 @@ $totalPaginas = ceil($totalRegistros / $limite);
             dataType: 'json',
             success: function(response) {
                 if (response.success) {
-                    alert('Usuário atualizado com sucesso!');
+                    $('body').toast({ class: 'success', message: 'Usuário atualizado com sucesso!', displayTime: 2000, onHide: function() { window.location.reload(); } });
                     $('#modal-editar').modal('hide');
-                    window.location.reload();
                 } else {
-                    alert('Erro: ' + response.error);
+                    $('body').toast({ class: 'error', message: 'Erro: ' + (response.error || 'Erro desconhecido.') });
                 }
             },
             error: function() {
-                alert('Erro ao atualizar usuário.');
+                $('body').toast({ class: 'error', message: 'Erro de comunicação ao atualizar usuário.' });
             }
         });
     }

@@ -49,23 +49,66 @@ if (empty($cliente) || empty($tipo_acesso) || empty($id_acesso_remoto)) {
     exit;
 }
 
-// 5. Escapar Dados para SQL (dbEscape deve usar a conexão Singleton)
-$cliente_sql = dbEscape($cliente);
-$tipo_acesso_sql = dbEscape($tipo_acesso);
-$id_acesso_remoto_sql = dbEscape($id_acesso_remoto);
-$senha_acesso_remoto_sql = dbEscape($senha_acesso_remoto);
-$observacoes_sql = dbEscape($observacoes);
+// 5. Validação Adicional
+// 5.1. Buscar tipos de acesso válidos do banco
+$sqlTipos = "SELECT DISTINCT tipo_acesso_remoto FROM conexoes";
+$resultTipos = dbQueryPrepared($sqlTipos, [], ""); // Usar dbQueryPrepared para consistência
+$validAccessTypes = [];
+if ($resultTipos) {
+    while ($row = dbFetchAssoc($resultTipos)) {
+        if (!empty($row['tipo_acesso_remoto'])) {
+            $validAccessTypes[] = $row['tipo_acesso_remoto'];
+        }
+    }
+}
+if (!in_array('RustDesk', $validAccessTypes)) {
+    $validAccessTypes[] = 'RustDesk'; // Garantir que RustDesk seja uma opção
+}
+// Adicionar outros tipos padrão se necessário, ex: AnyDesk, TeamViewer, etc.
+// Se a lista do DB for a autoridade máxima, não adicionar manualmente outros além de RustDesk (se for um default fixo)
+
+if (!in_array($tipo_acesso, $validAccessTypes)) {
+    $response['message'] = 'Tipo de Acesso inválido selecionado. Valores válidos: ' . implode(', ', $validAccessTypes);
+    echo json_encode($response);
+    exit;
+}
+
+// 5.2. Validação de Comprimento
+$errors = [];
+if (mb_strlen($cliente) > 255) {
+    $errors[] = 'O nome do Cliente não pode exceder 255 caracteres.';
+}
+if (mb_strlen($id_acesso_remoto) > 255) {
+    $errors[] = 'O ID de Acesso Remoto não pode exceder 255 caracteres.';
+}
+if (mb_strlen($senha_acesso_remoto) > 255) {
+    $errors[] = 'A Senha de Acesso Remoto não pode exceder 255 caracteres.';
+}
+if (mb_strlen($observacoes) > 1000) {
+    $errors[] = 'As Observações não podem exceder 1000 caracteres.';
+}
+
+if (!empty($errors)) {
+    $response['message'] = implode(' ', $errors); // Concatenar erros ou retornar o primeiro
+    echo json_encode($response);
+    exit;
+}
+
+// Não é mais necessário dbEscape aqui, pois usaremos prepared statements.
 
 // 6. Lógica de Banco de Dados (INSERT ou UPDATE)
 $id_usuario_logado = $_SESSION['user_id']; // Garantido por estaLogado()
 $sql = "";
+$params = [];
+$types = "";
 $is_update = false;
 
 if ($id) {
     // UPDATE
     // Verificar se a conexão pertence ao usuário ou se o usuário é admin
-    $checkSql = "SELECT id_usuario FROM conexoes WHERE id = {$id}";
-    $resultCheck = dbQuery($checkSql);
+    // Para esta verificação, podemos usar dbQueryPrepared também para consistência, ou manter dbQuery se preferir para queries simples sem input direto do usuário (além do ID)
+    $checkSql = "SELECT id_usuario FROM conexoes WHERE id = ?";
+    $resultCheck = dbQueryPrepared($checkSql, [$id], "i");
     $conexaoExistente = dbFetchAssoc($resultCheck);
 
     if (!$conexaoExistente) {
@@ -74,8 +117,6 @@ if ($id) {
         exit;
     }
 
-    // Permitir edição se for admin ou se for o dono da conexão
-    // A função ehAdmin() deve estar definida e funcional.
     if (!ehAdmin() && $conexaoExistente['id_usuario'] != $id_usuario_logado) {
         $response['message'] = 'Você não tem permissão para editar esta conexão.';
         http_response_code(403); // Forbidden
@@ -84,33 +125,65 @@ if ($id) {
     }
 
     $sql = "UPDATE conexoes SET
-                cliente = '{$cliente_sql}',
-                tipo_acesso_remoto = '{$tipo_acesso_sql}',
-                id_acesso_remoto = '{$id_acesso_remoto_sql}',
-                senha_acesso_remoto = '{$senha_acesso_remoto_sql}',
-                observacoes = '{$observacoes_sql}'
-            WHERE id = {$id}";
+                cliente = ?,
+                tipo_acesso_remoto = ?,
+                id_acesso_remoto = ?,
+                senha_acesso_remoto = ?,
+                observacoes = ?
+            WHERE id = ?";
+    $params = [$cliente, $tipo_acesso, $id_acesso_remoto, $senha_acesso_remoto, $observacoes, $id];
+    $types = "sssssi";
     $is_update = true;
 } else {
     // INSERT
     $sql = "INSERT INTO conexoes (cliente, tipo_acesso_remoto, id_acesso_remoto, senha_acesso_remoto, observacoes, id_usuario, data_criacao)
-            VALUES ('{$cliente_sql}', '{$tipo_acesso_sql}', '{$id_acesso_remoto_sql}', '{$senha_acesso_remoto_sql}', '{$observacoes_sql}', {$id_usuario_logado}, NOW())";
+            VALUES (?, ?, ?, ?, ?, ?, NOW())";
+    $params = [$cliente, $tipo_acesso, $id_acesso_remoto, $senha_acesso_remoto, $observacoes, $id_usuario_logado];
+    $types = "sssssi";
 }
 
 // 7. Executar Query e Retornar Resposta
-if (dbQuery($sql)) {
-    $response['success'] = true;
-    if ($is_update) {
-        $response['message'] = 'Conexão atualizada com sucesso!';
+$main_query_executed = false;
+if ($id) { // Se é uma tentativa de UPDATE
+    if ($resultCheck === false) { // A verificação da conexão existente falhou
+        $response['success'] = false;
+        $response['message'] = 'Ocorreu um erro ao verificar a conexão existente. Tente novamente.';
+    } elseif (!$conexaoExistente) { // A conexão não foi encontrada (já tratado antes, mas como fallback)
+        $response['success'] = false;
+        $response['message'] = 'Conexão não encontrada para atualização.';
+    } elseif (!ehAdmin() && $conexaoExistente['id_usuario'] != $id_usuario_logado) { // Permissão (já tratado antes)
+        $response['success'] = false;
+        $response['message'] = 'Você não tem permissão para editar esta conexão.';
+        http_response_code(403);
     } else {
-        $response['message'] = 'Conexão criada com sucesso!';
-        $response['new_id'] = dbInsertId(); // Enviar o novo ID para o cliente, se necessário
+        // Prossiga com a query de UPDATE
+        $result = dbQueryPrepared($sql, $params, $types);
+        $main_query_executed = true;
     }
-} else {
-    $response['message'] = 'Erro ao salvar conexão no banco de dados.';
-    // Em ambiente de desenvolvimento, pode ser útil logar o erro SQL específico.
-    // Ex: error_log("Erro SQL em salvar_conexao.php: Detalhes do erro aqui...");
+} else { // É uma tentativa de INSERT
+    $result = dbQueryPrepared($sql, $params, $types);
+    $main_query_executed = true;
 }
+
+if ($main_query_executed) {
+    if ($result !== false) {
+        $response['success'] = true;
+        if ($is_update) {
+            $response['message'] = 'Conexão atualizada com sucesso!';
+        } else {
+            $new_id = dbInsertId();
+            $response['message'] = 'Conexão criada com sucesso!';
+            if ($new_id > 0) {
+                $response['new_id'] = $new_id;
+            }
+        }
+    } else { // $result é false, a query principal (INSERT/UPDATE) falhou
+        $response['success'] = false;
+        $response['message'] = 'Ocorreu um erro ao salvar a conexão. Tente novamente.';
+    }
+}
+// Se $main_query_executed for false, a resposta já foi definida pelo bloco do if($id)
+
 
 echo json_encode($response);
 exit;

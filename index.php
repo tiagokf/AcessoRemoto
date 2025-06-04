@@ -230,12 +230,12 @@ $connectionTypesChartData = getConnectionTypesDataForChart();
                                     </td>
                                     <td class="center aligned">
                                         <button onclick="visualizarConexao(<?php echo $conexao['id']; ?>, 
-                                            '<?php echo htmlspecialchars($conexao['cliente']); ?>', 
-                                            '<?php echo htmlspecialchars($conexao['tipo_acesso_remoto']); ?>', 
-                                            '<?php echo htmlspecialchars($conexao['id_acesso_remoto']); ?>', 
-                                            '<?php echo htmlspecialchars($conexao['senha_acesso_remoto'] ?? ''); ?>', 
-                                            '<?php echo htmlspecialchars(addslashes($conexao['observacoes'] ?? '')); ?>', 
-                                            '<?php echo !empty($conexao['ultimo_acesso']) ? date('d/m/Y H:i', strtotime($conexao['ultimo_acesso'])) : 'Nunca acessada'; ?>')" 
+                                            <?php echo htmlspecialchars(json_encode($conexao['cliente'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>,
+                                            <?php echo htmlspecialchars(json_encode($conexao['tipo_acesso_remoto'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>,
+                                            <?php echo htmlspecialchars(json_encode($conexao['id_acesso_remoto'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>,
+                                            <?php echo htmlspecialchars(json_encode($conexao['senha_acesso_remoto'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>,
+                                            <?php echo htmlspecialchars(json_encode($conexao['observacoes'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>,
+                                            <?php echo htmlspecialchars(json_encode(!empty($conexao['ultimo_acesso']) ? date('d/m/Y H:i', strtotime($conexao['ultimo_acesso'])) : 'Nunca acessada'), ENT_QUOTES, 'UTF-8'); ?>)"
                                             class="ui mini primary button">
                                             <i class="eye icon"></i> Visualizar
                                         </button>
@@ -284,7 +284,7 @@ $connectionTypesChartData = getConnectionTypesDataForChart();
                     <label>ID de Acesso</label>
                     <div class="ui action input">
                         <input type="text" id="visualizar-id-acesso" readonly>
-                        <button class="ui icon button" onclick="copiarParaClipboard('visualizar-id-acesso')">
+                        <button class="ui icon button" id="btn-visualizar-copiar-id" onclick="copiarParaClipboard('visualizar-id-acesso', 'btn-visualizar-copiar-id')">
                             <i class="copy icon"></i>
                         </button>
                     </div>
@@ -294,7 +294,21 @@ $connectionTypesChartData = getConnectionTypesDataForChart();
                     <label>Senha de Acesso</label>
                     <div class="ui action input">
                         <input type="text" id="visualizar-senha" readonly>
-                        <button class="ui icon button" onclick="copiarParaClipboard('visualizar-senha')">
+                        <button class="ui icon button" id="btn-visualizar-copiar-senha" onclick="copiarParaClipboard('visualizar-senha', 'btn-visualizar-copiar-senha')">
+                            <i class="copy icon"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="field" id="campo-senha-padrao-visualizar" style="display: none;">
+                    <label>Senha Padrão</label>
+                    <div class="ui action input">
+                        <select class="ui dropdown" id="select-senha-padrao-visualizar">
+                            <option value="SemSenha">SemSenha</option>
+                            <option value="RustDesk@2020">RustDesk@2020</option>
+                            <!-- Outras senhas padrão podem ser adicionadas aqui se necessário -->
+                        </select>
+                        <button class="ui icon button" id="btn-visualizar-copiar-senha-padrao" onclick="copiarSenhaPadraoVisualizar('btn-visualizar-copiar-senha-padrao')">
                             <i class="copy icon"></i>
                         </button>
                     </div>
@@ -479,28 +493,91 @@ $connectionTypesChartData = getConnectionTypesDataForChart();
             $('#visualizar-ultimo-acesso').val(ultimoAcesso);
             $('#visualizar-observacoes').val(observacoes);
             
-            // Configurar o botão de acessar
-            $('#btn-acessar-conexao').attr('href', '<?php echo SITE_URL; ?>/modules/conexoes/acessar.php?id=' + id);
+            // Remover configuração do botão de acessar, pois acessar.php não existe
+             $('#btn-acessar-conexao').hide(); // Ocultar o botão
             
-            // Exibir/ocultar campo de senha
+            // Exibir/ocultar campos de senha de acordo com as informações
             if (senha) {
                 $('#campo-senha-visualizar').show();
+                $('#visualizar-senha').val(senha);
+                $('#campo-senha-padrao-visualizar').hide();
             } else {
                 $('#campo-senha-visualizar').hide();
+                $('#campo-senha-padrao-visualizar').show();
+
+                // Selecionar senha padrão com base no tipo
+                if (tipo === 'RustDesk') {
+                    $('#select-senha-padrao-visualizar').val('RustDesk@2020');
+                } else {
+                    $('#select-senha-padrao-visualizar').val('SemSenha');
+                }
+                // Semantic UI dropdowns podem precisar ser atualizadas após mudar o valor programaticamente
+                $('#select-senha-padrao-visualizar').dropdown('refresh');
             }
+
+            // Registrar o acesso (similar ao de listar.php)
+            $.post('<?php echo SITE_URL; ?>/modules/conexoes/registrar_acesso.php', {
+                id_conexao: id,
+                detalhes: 'Visualização de conexão no dashboard.'
+            }).done(function(response) {
+                // console.log('Acesso registrado:', response);
+            }).fail(function() {
+                // console.error('Falha ao registrar acesso.');
+            });
             
             // Exibir o modal
             $('#modal-visualizar').modal('show');
         }
+
+        function copiarSenhaPadraoVisualizar(buttonId) {
+            const senhaEl = document.getElementById('select-senha-padrao-visualizar');
+            if (!senhaEl) return;
+            const senha = senhaEl.value;
+            navigator.clipboard.writeText(senha).then(function () {
+                // Feedback visual no botão
+                if (buttonId) {
+                    const button = $('#' + buttonId);
+                    const originalIcon = button.find('i').attr('class');
+                    button.find('i').attr('class', 'check icon');
+                    button.addClass('green');
+
+                    setTimeout(function() {
+                        button.find('i').attr('class', originalIcon);
+                        button.removeClass('green');
+                    }, 2000);
+                }
+                // Toast
+                $('body')
+                    .toast({
+                        class: 'success',
+                        message: 'Senha padrão copiada!',
+                        showProgress: 'bottom',
+                        displayTime: 2000
+                    });
+            });
+        }
         
-        function copiarParaClipboard(elementId) {
+        function copiarParaClipboard(elementId, buttonId) {
             const elemento = document.getElementById(elementId);
             elemento.select();
             document.execCommand('copy');
+
+            // Feedback visual no botão
+            if (buttonId) {
+                const button = $('#' + buttonId);
+                const originalIcon = button.find('i').attr('class');
+                button.find('i').attr('class', 'check icon');
+                button.addClass('green');
+
+                setTimeout(function() {
+                    button.find('i').attr('class', originalIcon);
+                    button.removeClass('green');
+                }, 2000);
+            }
             
             $('body').toast({
                 class: 'success',
-                message: 'Copiado para a área de transferência',
+                message: 'Copiado para a área de transferência!',
                 showProgress: 'bottom',
                 displayTime: 2000
             });

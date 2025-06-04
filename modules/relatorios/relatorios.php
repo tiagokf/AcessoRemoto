@@ -12,83 +12,100 @@ exigirLogin();
 // Processar filtros
 $data_inicio = isset($_GET['data_inicio']) ? $_GET['data_inicio'] : date('Y-m-d', strtotime('-30 days'));
 $data_fim = isset($_GET['data_fim']) ? $_GET['data_fim'] : date('Y-m-d');
-$cliente = isset($_GET['cliente']) ? dbEscape($_GET['cliente']) : '';
-$tipo_acesso = isset($_GET['tipo_acesso']) ? dbEscape($_GET['tipo_acesso']) : '';
+$cliente_filter = isset($_GET['cliente']) ? trim($_GET['cliente']) : '';
+$tipo_acesso_filter = isset($_GET['tipo_acesso']) ? trim($_GET['tipo_acesso']) : '';
 
-// Construir cláusula WHERE para filtros
-$whereClause = "WHERE a.data_acesso BETWEEN '$data_inicio 00:00:00' AND '$data_fim 23:59:59'";
+// Construir cláusula WHERE para filtros e parâmetros para prepared statements
+$conditions = [];
+$base_params = [];
+$base_types = "";
 
-if (!empty($cliente)) {
-    $whereClause .= " AND c.cliente LIKE '%$cliente%'";
+// Filtro de data (obrigatório)
+$conditions[] = "a.data_acesso BETWEEN ? AND ?";
+$base_params[] = $data_inicio . " 00:00:00";
+$base_params[] = $data_fim . " 23:59:59";
+$base_types .= "ss";
+
+if (!empty($cliente_filter)) {
+    $conditions[] = "c.cliente LIKE ?";
+    $base_params[] = "%" . $cliente_filter . "%";
+    $base_types .= "s";
 }
 
-if (!empty($tipo_acesso)) {
-    $whereClause .= " AND c.tipo_acesso_remoto = '$tipo_acesso'";
+if (!empty($tipo_acesso_filter)) {
+    $conditions[] = "c.tipo_acesso_remoto = ?";
+    $base_params[] = $tipo_acesso_filter;
+    $base_types .= "s";
+}
+
+$whereClauseSQL = "";
+if (!empty($conditions)) {
+    $whereClauseSQL = "WHERE " . implode(" AND ", $conditions);
 }
 
 // Consultas para relatórios
 // 1. Total de acessos no período
-$sql = "SELECT COUNT(*) as total FROM acessos a JOIN conexoes c ON a.id_conexao = c.id $whereClause";
-$result = dbQuery($sql);
-$total_acessos = dbFetchAssoc($result)['total'];
+$sql_total_acessos = "SELECT COUNT(*) as total FROM acessos a JOIN conexoes c ON a.id_conexao = c.id $whereClauseSQL";
+$result_total_acessos = dbQueryPrepared($sql_total_acessos, $base_params, $base_types);
+$total_acessos = $result_total_acessos ? (dbFetchAssoc($result_total_acessos)['total'] ?? 0) : 0;
 
 // 2. Acessos por tipo
-$sql = "SELECT c.tipo_acesso_remoto, COUNT(*) as total 
-        FROM acessos a 
-        JOIN conexoes c ON a.id_conexao = c.id 
-        $whereClause 
-        GROUP BY c.tipo_acesso_remoto 
-        ORDER BY total DESC";
-$result = dbQuery($sql);
-$acessos_por_tipo = dbFetchAll($result);
+$sql_acessos_por_tipo = "SELECT c.tipo_acesso_remoto, COUNT(*) as total
+                        FROM acessos a
+                        JOIN conexoes c ON a.id_conexao = c.id
+                        $whereClauseSQL
+                        GROUP BY c.tipo_acesso_remoto
+                        ORDER BY total DESC";
+$result_acessos_por_tipo = dbQueryPrepared($sql_acessos_por_tipo, $base_params, $base_types);
+$acessos_por_tipo = $result_acessos_por_tipo ? dbFetchAll($result_acessos_por_tipo) : [];
 
-// 3. Acessos por cliente
-$sql = "SELECT c.cliente, COUNT(*) as total 
-        FROM acessos a 
-        JOIN conexoes c ON a.id_conexao = c.id 
-        $whereClause 
-        GROUP BY c.cliente 
-        ORDER BY total DESC 
-        LIMIT 10";
-$result = dbQuery($sql);
-$acessos_por_cliente = dbFetchAll($result);
+// 3. Acessos por cliente (LIMIT 10)
+$sql_acessos_por_cliente = "SELECT c.cliente, COUNT(*) as total
+                           FROM acessos a
+                           JOIN conexoes c ON a.id_conexao = c.id
+                           $whereClauseSQL
+                           GROUP BY c.cliente
+                           ORDER BY total DESC
+                           LIMIT 10"; // LIMIT não é parametrizado aqui, pois é fixo. Se fosse dinâmico, precisaria de cuidado.
+$result_acessos_por_cliente = dbQueryPrepared($sql_acessos_por_cliente, $base_params, $base_types);
+$acessos_por_cliente = $result_acessos_por_cliente ? dbFetchAll($result_acessos_por_cliente) : [];
 
 // 4. Acessos por usuário
-$sql = "SELECT u.nome, COUNT(*) as total 
-        FROM acessos a 
-        JOIN conexoes c ON a.id_conexao = c.id 
-        JOIN usuarios u ON a.id_usuario = u.id 
-        $whereClause 
-        GROUP BY u.nome 
-        ORDER BY total DESC";
-$result = dbQuery($sql);
-$acessos_por_usuario = dbFetchAll($result);
+$sql_acessos_por_usuario = "SELECT u.nome, COUNT(*) as total
+                           FROM acessos a
+                           JOIN conexoes c ON a.id_conexao = c.id
+                           JOIN usuarios u ON a.id_usuario = u.id
+                           $whereClauseSQL
+                           GROUP BY u.nome
+                           ORDER BY total DESC";
+$result_acessos_por_usuario = dbQueryPrepared($sql_acessos_por_usuario, $base_params, $base_types);
+$acessos_por_usuario = $result_acessos_por_usuario ? dbFetchAll($result_acessos_por_usuario) : [];
 
 // 5. Acessos por dia
-$sql = "SELECT DATE(a.data_acesso) as data, COUNT(*) as total 
-        FROM acessos a 
-        JOIN conexoes c ON a.id_conexao = c.id 
-        $whereClause 
-        GROUP BY DATE(a.data_acesso) 
-        ORDER BY data ASC";
-$result = dbQuery($sql);
-$acessos_por_dia = dbFetchAll($result);
+$sql_acessos_por_dia = "SELECT DATE(a.data_acesso) as data, COUNT(*) as total
+                       FROM acessos a
+                       JOIN conexoes c ON a.id_conexao = c.id
+                       $whereClauseSQL
+                       GROUP BY DATE(a.data_acesso)
+                       ORDER BY data ASC";
+$result_acessos_por_dia = dbQueryPrepared($sql_acessos_por_dia, $base_params, $base_types);
+$acessos_por_dia = $result_acessos_por_dia ? dbFetchAll($result_acessos_por_dia) : [];
 
-// 6. Lista dos últimos acessos
-$sql = "SELECT a.id, a.data_acesso, c.cliente, c.tipo_acesso_remoto, u.nome as usuario, a.ip_acesso 
-        FROM acessos a 
-        JOIN conexoes c ON a.id_conexao = c.id 
-        JOIN usuarios u ON a.id_usuario = u.id 
-        $whereClause 
-        ORDER BY a.data_acesso DESC 
-        LIMIT 20";
-$result = dbQuery($sql);
-$ultimos_acessos = dbFetchAll($result);
+// 6. Lista dos últimos acessos (LIMIT 20)
+$sql_ultimos_acessos = "SELECT a.id, a.data_acesso, c.cliente, c.tipo_acesso_remoto, u.nome as usuario, a.ip_acesso
+                       FROM acessos a
+                       JOIN conexoes c ON a.id_conexao = c.id
+                       JOIN usuarios u ON a.id_usuario = u.id
+                       $whereClauseSQL
+                       ORDER BY a.data_acesso DESC
+                       LIMIT 20"; // LIMIT não é parametrizado aqui, pois é fixo.
+$result_ultimos_acessos = dbQueryPrepared($sql_ultimos_acessos, $base_params, $base_types);
+$ultimos_acessos = $result_ultimos_acessos ? dbFetchAll($result_ultimos_acessos) : [];
 
 // Obter lista de tipos de acesso para filtro
-$sql = "SELECT DISTINCT tipo_acesso_remoto FROM conexoes ORDER BY tipo_acesso_remoto";
-$result = dbQuery($sql);
-$tipos_acesso = dbFetchAll($result);
+$sql_tipos = "SELECT DISTINCT tipo_acesso_remoto FROM conexoes ORDER BY tipo_acesso_remoto";
+$result_tipos = dbQueryPrepared($sql_tipos, [], "");
+$tipos_acesso = $result_tipos ? dbFetchAll($result_tipos) : [];
 
 // Incluir cabeçalho
 include '../../includes/header.php';

@@ -21,19 +21,19 @@ function getDashboardPrincipalStats() {
     ];
 
     // Total de conexões
-    $result = dbQuery("SELECT COUNT(*) as total FROM conexoes");
+    $result = dbQueryPrepared("SELECT COUNT(*) as total FROM conexoes", [], "");
     if ($result) $stats['total_conexoes'] = dbFetchAssoc($result)['total'] ?? 0;
 
     // Total de acessos
-    $result = dbQuery("SELECT COUNT(*) as total FROM acessos");
+    $result = dbQueryPrepared("SELECT COUNT(*) as total FROM acessos", [], "");
     if ($result) $stats['total_acessos'] = dbFetchAssoc($result)['total'] ?? 0;
 
     // Acessos hoje
-    $result = dbQuery("SELECT COUNT(*) as total FROM acessos WHERE DATE(data_acesso) = CURDATE()");
+    $result = dbQueryPrepared("SELECT COUNT(*) as total FROM acessos WHERE DATE(data_acesso) = CURDATE()", [], "");
     if ($result) $stats['acessos_hoje'] = dbFetchAssoc($result)['total'] ?? 0;
 
     // Total de usuários
-    $result = dbQuery("SELECT COUNT(*) as total FROM usuarios");
+    $result = dbQueryPrepared("SELECT COUNT(*) as total FROM usuarios", [], "");
     if ($result) $stats['total_usuarios'] = dbFetchAssoc($result)['total'] ?? 0;
 
     return $stats;
@@ -49,7 +49,7 @@ function getRecentAccessDataForChart() {
             WHERE data_acesso >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
             GROUP BY DATE(data_acesso)
             ORDER BY data ASC"; // Ordenar por data ASC para facilitar o preenchimento
-    $result = dbQuery($sql);
+    $result = dbQueryPrepared($sql, [], "");
     $acessos_por_dia_db = dbFetchAll($result);
 
     $labels = [];
@@ -77,14 +77,14 @@ function getRecentAccessDataForChart() {
  * @return array Lista das últimas conexões acessadas.
  */
 function getLastAccessedConnections($limit = 5) {
-    $limit = intval($limit);
+    $limit = intval($limit); // Ensure limit is an integer
     $sql = "SELECT c.id, c.cliente, c.tipo_acesso_remoto, c.id_acesso_remoto, c.senha_acesso_remoto, c.observacoes, MAX(a.data_acesso) as ultimo_acesso
             FROM conexoes c
             LEFT JOIN acessos a ON c.id = a.id_conexao
             GROUP BY c.id
             ORDER BY ultimo_acesso DESC, c.id DESC
-            LIMIT {$limit}";
-    $result = dbQuery($sql);
+            LIMIT ?";
+    $result = dbQueryPrepared($sql, [$limit], "i");
     return $result ? dbFetchAll($result) : []; // Retornar array vazio em caso de falha
 }
 
@@ -94,7 +94,7 @@ function getLastAccessedConnections($limit = 5) {
  */
 function getConnectionTypesDataForChart() {
     $sql = "SELECT tipo_acesso_remoto, COUNT(*) as total FROM conexoes GROUP BY tipo_acesso_remoto ORDER BY total DESC";
-    $result = dbQuery($sql);
+    $result = dbQueryPrepared($sql, [], "");
     $tipos_acesso_db = $result ? dbFetchAll($result) : []; // Retornar array vazio em caso de falha
 
     $labels = [];

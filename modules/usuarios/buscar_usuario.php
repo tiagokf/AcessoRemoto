@@ -9,10 +9,11 @@ header('Content-Type: application/json');
 
 if (isset($_GET['id']) && is_numeric($_GET['id'])) {
     $id = intval($_GET['id']);
-    $result = dbQuery("SELECT id, nome, email, nivel_acesso FROM usuarios WHERE id = $id");
-    $usuario = dbFetchAssoc($result);
+    $sql = "SELECT id, nome, email, nivel_acesso FROM usuarios WHERE id = ?";
+    $result = dbQueryPrepared($sql, [$id], "i");
     
-    if ($usuario) {
+    if ($result && $result->num_rows > 0) {
+        $usuario = dbFetchAssoc($result);
         echo json_encode($usuario);
     } else {
         echo json_encode(['error' => 'Usuário não encontrado']);

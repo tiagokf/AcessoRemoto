@@ -25,10 +25,16 @@ if (isset($_GET['excluir']) && is_numeric($_GET['excluir'])) {
         showAlert('Conexão excluída com sucesso!', 'positive');
     }
     
-    // Redirecionar de volta para a URL atual sem o parâmetro 'excluir'
-    $currentUrl = $_SERVER['REQUEST_URI'];
-    $redirectUrl = preg_replace('/&?excluir=\\d+/', '', $currentUrl);
-    header("Location: $redirectUrl");
+    // Redirecionar de volta para a URL atual preservando outros parâmetros GET
+    $queryParams = $_GET;
+    unset($queryParams['excluir']); // Remove o parâmetro 'excluir'
+
+    $redirectUrl = strtok($_SERVER['REQUEST_URI'], '?'); // Pega a URL base sem query string
+    if (!empty($queryParams)) {
+        $redirectUrl .= '?' . http_build_query($queryParams); // Adiciona a query string reconstruída
+    }
+
+    header("Location: " . $redirectUrl);
     exit;
 }
 
@@ -86,11 +92,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         showAlert('Nenhuma conexão selecionada para exclusão.', 'warning');
     }
     
-    // Redirecionar de volta para a URL atual
-    $currentUrl = $_SERVER['REQUEST_URI'];
-    // Limpar quaisquer parâmetros GET para evitar reprocessamento ou mensagens duplicadas no refresh
-    $redirectUrl = strtok($currentUrl, '?');
-    header("Location: $redirectUrl");
+    // Redirecionar de volta para a URL atual, preservando os filtros e paginação
+    $preserved_params = [];
+    // Preservar parâmetros de busca e filtro
+    if (isset($_GET['busca']) && !empty($_GET['busca'])) $preserved_params['busca'] = $_GET['busca'];
+    if (isset($_GET['filtro_tipo']) && !empty($_GET['filtro_tipo'])) $preserved_params['filtro_tipo'] = $_GET['filtro_tipo'];
+    if (isset($_GET['filtro_cliente']) && !empty($_GET['filtro_cliente'])) $preserved_params['filtro_cliente'] = $_GET['filtro_cliente'];
+    if (isset($_GET['filtro_id_acesso']) && !empty($_GET['filtro_id_acesso'])) $preserved_params['filtro_id_acesso'] = $_GET['filtro_id_acesso'];
+    if (isset($_GET['filtro_observacoes']) && !empty($_GET['filtro_observacoes'])) $preserved_params['filtro_observacoes'] = $_GET['filtro_observacoes'];
+    if (isset($_GET['filtro_data_inicio']) && !empty($_GET['filtro_data_inicio'])) $preserved_params['filtro_data_inicio'] = $_GET['filtro_data_inicio'];
+    if (isset($_GET['filtro_data_fim']) && !empty($_GET['filtro_data_fim'])) $preserved_params['filtro_data_fim'] = $_GET['filtro_data_fim'];
+    if (isset($_GET['filtro_sem_acesso'])) $preserved_params['filtro_sem_acesso'] = $_GET['filtro_sem_acesso'] === 'on' || $_GET['filtro_sem_acesso'] === true ? 'on' : ''; // Preservar estado do checkbox
+
+    // Preservar parâmetros de ordenação
+    if (isset($_GET['orderBy']) && !empty($_GET['orderBy'])) $preserved_params['orderBy'] = $_GET['orderBy'];
+    if (isset($_GET['orderDir']) && !empty($_GET['orderDir'])) $preserved_params['orderDir'] = $_GET['orderDir'];
+
+    // Preservar parâmetros de paginação
+    if (isset($_GET['pagina']) && !empty($_GET['pagina'])) $preserved_params['pagina'] = $_GET['pagina'];
+    if (isset($_GET['limite']) && !empty($_GET['limite'])) $preserved_params['limite'] = $_GET['limite'];
+
+    $redirectUrl = 'listar.php';
+    if (!empty($preserved_params)) {
+        // Remover chaves com valores vazios, exceto para 'filtro_sem_acesso' que pode ser 'on' ou ''
+        foreach ($preserved_params as $key => $value) {
+            if ($value === '' && $key !== 'filtro_sem_acesso') {
+                unset($preserved_params[$key]);
+            }
+        }
+        if (!empty($preserved_params)) { // Verificar novamente se sobrou algum parâmetro
+             $redirectUrl .= '?' . http_build_query($preserved_params);
+        }
+    }
+    header("Location: " . $redirectUrl);
     exit;
 }
 
@@ -165,26 +199,32 @@ if (!empty($filtro_observacoes)) {
 // Adicionar condições de data usando uma subconsulta para o último acesso
 if (!empty($filtro_data_inicio) || !empty($filtro_data_fim) || $filtro_sem_acesso) {
     // Subconsulta para acessos
-    $acessosSubquery = "SELECT id_conexao, MAX(data_acesso) as ultimo_acesso FROM acessos GROUP BY id_conexao";
+    $acessosSubqueryBase = "(SELECT id_conexao, MAX(data_acesso) as ultimo_acesso FROM acessos GROUP BY id_conexao)";
     
     if ($filtro_sem_acesso) {
         $conditions[] = "NOT EXISTS (SELECT 1 FROM acessos a WHERE a.id_conexao = c.id)";
     } else {
+        // Coletar condições de filtro de data para a subconsulta de acessos
+        $acessosFilterConditions = [];
         if (!empty($filtro_data_inicio)) {
             $date_inicio = date('Y-m-d', strtotime($filtro_data_inicio));
-            $acessosConditions[] = "ultimo_acesso >= '$date_inicio 00:00:00'";
+            $acessosFilterConditions[] = "ultimo_acesso >= '$date_inicio 00:00:00'";
         }
         
         if (!empty($filtro_data_fim)) {
             $date_fim = date('Y-m-d', strtotime($filtro_data_fim));
-            $acessosConditions[] = "ultimo_acesso <= '$date_fim 23:59:59'";
+            $acessosFilterConditions[] = "ultimo_acesso <= '$date_fim 23:59:59'";
         }
         
-        if (!empty($acessosConditions)) {
-            $acessosWhere = " WHERE " . implode(" AND ", $acessosConditions);
-            $acessosSubquery .= $acessosWhere;
-            $conditions[] = "c.id IN (SELECT id_conexao FROM ($acessosSubquery) as a)";
+        // Se houver condições de filtro de data, aplicar à subconsulta
+        if (!empty($acessosFilterConditions)) {
+            $conditions[] = "c.id IN (SELECT id_conexao FROM " . $acessosSubqueryBase . " AS sub_acessos WHERE " . implode(" AND ", $acessosFilterConditions) . ")";
         }
+        // Se não houver filtros de data, mas $filtro_sem_acesso não estiver marcado,
+        // não adicionamos condição baseada em data, permitindo conexões com e sem acessos (se não filtrado por "sem acesso").
+        // Se o objetivo fosse listar apenas conexões COM acessos (mesmo sem filtro de data), seria:
+        // else { $conditions[] = "c.id IN (SELECT id_conexao FROM " . $acessosSubqueryBase . " AS sub_acessos)"; }
+        // Mas a lógica atual parece correta: se não há filtro de data e não é "sem acesso", não filtra por data de acesso.
     }
 }
 
@@ -604,19 +644,19 @@ while ($row = dbFetchAssoc($resultClientes)) {
                             </td>
                             <td class="acoes-column">
                                 <a class="ui mini blue button" href="javascript:void(0);" onclick="acessarConexao(<?php echo $conexao['id']; ?>, 
-                                    '<?php echo htmlspecialchars(addslashes($conexao['cliente'] ?? '')); ?>', 
-                                    '<?php echo htmlspecialchars(addslashes($conexao['tipo_acesso_remoto'] ?? '')); ?>', 
-                                    '<?php echo htmlspecialchars(addslashes($conexao['id_acesso_remoto'] ?? '')); ?>', 
-                                    '<?php echo htmlspecialchars(addslashes($conexao['senha_acesso_remoto'] ?? '')); ?>')">
+                                    <?php echo htmlspecialchars(json_encode($conexao['cliente'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>,
+                                    <?php echo htmlspecialchars(json_encode($conexao['tipo_acesso_remoto'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>,
+                                    <?php echo htmlspecialchars(json_encode($conexao['id_acesso_remoto'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>,
+                                    <?php echo htmlspecialchars(json_encode($conexao['senha_acesso_remoto'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>)">
                                     <i class="external alternate icon"></i> Acessar
                                 </a>
                                 
                                 <a class="ui mini green button" href="javascript:void(0);" onclick="abrirModalEditar(<?php echo $conexao['id']; ?>, 
-                                    '<?php echo htmlspecialchars(addslashes($conexao['cliente'] ?? '')); ?>', 
-                                    '<?php echo htmlspecialchars(addslashes($conexao['tipo_acesso_remoto'] ?? '')); ?>', 
-                                    '<?php echo htmlspecialchars(addslashes($conexao['id_acesso_remoto'] ?? '')); ?>', 
-                                    '<?php echo htmlspecialchars(addslashes($conexao['senha_acesso_remoto'] ?? '')); ?>', 
-                                    '<?php echo htmlspecialchars(addslashes($conexao['observacoes'] ?? '')); ?>')">
+                                    <?php echo htmlspecialchars(json_encode($conexao['cliente'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>,
+                                    <?php echo htmlspecialchars(json_encode($conexao['tipo_acesso_remoto'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>,
+                                    <?php echo htmlspecialchars(json_encode($conexao['id_acesso_remoto'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>,
+                                    <?php echo htmlspecialchars(json_encode($conexao['senha_acesso_remoto'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>,
+                                    <?php echo htmlspecialchars(json_encode($conexao['observacoes'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>)">
                                     <i class="edit icon"></i> Editar
                                 </a>
                                 
@@ -727,8 +767,9 @@ while ($row = dbFetchAssoc($resultClientes)) {
                 <label>ID de Acesso</label>
                 <div class="ui action input">
                     <input type="text" id="modal-id-acesso" readonly>
-                    <button class="ui icon button" onclick="copiarParaClipboard('modal-id-acesso')">
+                    <button class="ui labeled icon button" id="btn-copiar-id" onclick="copiarParaClipboard('modal-id-acesso', 'btn-copiar-id')">
                         <i class="copy icon"></i>
+                        Copiar
                     </button>
                 </div>
             </div>
@@ -737,8 +778,9 @@ while ($row = dbFetchAssoc($resultClientes)) {
                 <label>Senha de Acesso</label>
                 <div class="ui action input">
                     <input type="text" id="modal-senha" readonly>
-                    <button class="ui icon button" onclick="copiarParaClipboard('modal-senha')">
+                    <button class="ui labeled icon button" id="btn-copiar-senha" onclick="copiarParaClipboard('modal-senha', 'btn-copiar-senha')">
                         <i class="copy icon"></i>
+                        Copiar
                     </button>
                 </div>
             </div>
@@ -750,8 +792,9 @@ while ($row = dbFetchAssoc($resultClientes)) {
                         <option value="SemSenha">SemSenha</option>
                         <option value="RustDesk@2020">RustDesk@2020</option>
                     </select>
-                    <button class="ui icon button" onclick="copiarSenhaPadrao()">
+                    <button class="ui labeled icon button" id="btn-copiar-senha-padrao" onclick="copiarSenhaPadrao('btn-copiar-senha-padrao')">
                         <i class="copy icon"></i>
+                        Copiar
                     </button>
                 </div>
             </div>
@@ -863,38 +906,59 @@ while ($row = dbFetchAssoc($resultClientes)) {
         $('#modal-acesso').modal('show');
     }
 
-    function copiarParaClipboard(elementId) {
+    function copiarParaClipboard(elementId, buttonId) {
         const elemento = document.getElementById(elementId);
         elemento.select();
         document.execCommand('copy');
 
-        // Feedback visual
+        // Feedback visual no botão
+        const button = $('#' + buttonId);
+        const originalIcon = button.find('i').attr('class');
+        button.find('i').attr('class', 'check icon');
+        button.addClass('green');
+
+        setTimeout(function() {
+            button.find('i').attr('class', originalIcon);
+            button.removeClass('green');
+        }, 2000);
+
+        // Toast
         $('body')
             .toast({
                 class: 'success',
-                message: 'Copiado para a área de transferência',
+                message: 'Copiado para a área de transferência!',
                 showProgress: 'bottom',
                 displayTime: 2000
             });
     }
 
-    function copiarSenhaPadrao() {
+    function copiarSenhaPadrao(buttonId) {
         const senha = document.getElementById('select-senha-padrao').value;
         navigator.clipboard.writeText(senha).then(function () {
-            showCopyFeedback();
+            // Feedback visual no botão
+            const button = $('#' + buttonId);
+            const originalIcon = button.find('i').attr('class');
+            button.find('i').attr('class', 'check icon');
+            button.addClass('green');
+
+            setTimeout(function() {
+                button.find('i').attr('class', originalIcon);
+                button.removeClass('green');
+            }, 2000);
+
+            // Toast
+            $('body')
+                .toast({
+                    class: 'success',
+                    message: 'Senha padrão copiada!',
+                    showProgress: 'bottom',
+                    displayTime: 2000
+                });
         });
     }
 
-    function showCopyFeedback() {
-        // Criar e mostrar um toast
-        $('body')
-            .toast({
-                class: 'success',
-                message: 'Copiado para a área de transferência',
-                showProgress: 'bottom',
-                displayTime: 2000
-            });
-    }
+    // Esta função não é mais necessária, pois o toast é mostrado diretamente
+    // function showCopyFeedback() { ... }
 
     function abrirModalAdicionar() {
         $('#modal-conexao-titulo').html('<i class="server icon"></i> Nova Conexão');
@@ -919,48 +983,77 @@ while ($row = dbFetchAssoc($resultClientes)) {
 
     function salvarConexao() {
         if ($('#form-conexao').form('is valid')) {
+            // Get the save button (assuming it's the primary approve button in the modal)
+            const saveButton = $('#modal-conexao .actions .primary.approve.button');
+
+            // Disable button and show loading state
+            saveButton.addClass('loading disabled');
+
             $.ajax({
                 url: 'salvar_conexao.php',
                 method: 'POST',
                 data: $('#form-conexao').serialize(),
                 success: function (response) {
                     try {
-                        var data = JSON.parse(response);
+                        var data = JSON.parse(response); // Try to parse, but it might already be an object if jQuery auto-parses JSON
+                        if (typeof response === 'string') { // If it was a string, parse it
+                             data = JSON.parse(response);
+                        } else { // If jQuery already parsed it
+                             data = response;
+                        }
+
                         if (data.success) {
                             $('body').toast({
                                 class: 'success',
                                 message: data.message || 'Conexão salva com sucesso!',
                                 showProgress: 'bottom',
-                                displayTime: 2000
+                                displayTime: 2000,
+                                onHide: function() { // Reload only after the toast is hidden
+                                    window.location.reload();
+                                }
                             });
                             $('#modal-conexao').modal('hide');
-                            setTimeout(function () {
-                                window.location.reload();
-                            }, 2000);
+                            // setTimeout for reload is now handled by toast's onHide
                         } else {
                             $('body').toast({
                                 class: 'error',
                                 message: data.message || 'Erro ao salvar conexão.',
                                 showProgress: 'bottom',
-                                displayTime: 2000
+                                displayTime: 3000 // Longer display for errors
                             });
                         }
                     } catch (e) {
+                        console.error("Error parsing JSON response: ", e);
+                        console.error("Raw response: ", response);
                         $('body').toast({
                             class: 'error',
-                            message: 'Erro ao processar resposta do servidor.',
+                            message: 'Erro ao processar resposta do servidor. Verifique o console para detalhes.',
                             showProgress: 'bottom',
-                            displayTime: 2000
+                            displayTime: 3000
                         });
                     }
                 },
-                error: function () {
+                error: function (jqXHR, textStatus, errorThrown) {
+                    let errorMessage = 'Erro de conexão com o servidor.';
+                    if (jqXHR.responseJSON && jqXHR.responseJSON.message) {
+                        errorMessage = jqXHR.responseJSON.message;
+                    } else if (jqXHR.responseText) {
+                        try {
+                            const errData = JSON.parse(jqXHR.responseText);
+                            if (errData.message) errorMessage = errData.message;
+                        } catch (e) { /* no valid JSON in responseText */ }
+                    }
+                    console.error("AJAX error: ", textStatus, errorThrown, jqXHR.responseText);
                     $('body').toast({
                         class: 'error',
-                        message: 'Erro de conexão com o servidor.',
+                        message: errorMessage,
                         showProgress: 'bottom',
-                        displayTime: 2000
+                        displayTime: 3000
                     });
+                },
+                complete: function () {
+                    // Re-enable button and remove loading state
+                    saveButton.removeClass('loading disabled');
                 }
             });
         }
@@ -1054,6 +1147,21 @@ while ($row = dbFetchAssoc($resultClientes)) {
         
         // Verificar estado inicial
         atualizarBotaoLote();
+
+        // Abrir accordion de filtros se filtros estiverem ativos
+        <?php
+        $hasActiveFilters = !empty($filtro_tipo) ||
+                            !empty($filtro_cliente) ||
+                            !empty($filtro_id_acesso) ||
+                            !empty($filtro_observacoes) ||
+                            !empty($filtro_data_inicio) ||
+                            !empty($filtro_data_fim) ||
+                            $filtro_sem_acesso;
+        if ($hasActiveFilters): ?>
+        if ($('.ui.accordion .title').not('.active').length) {
+            $('.ui.accordion').accordion('open', 0);
+        }
+        <?php endif; ?>
     });
     
     // Função para confirmar exclusão em lote

@@ -7,7 +7,7 @@ require_once '../../config/config.php';
 require_once '../../config/database.php';
 
 // Verificar se o usuário é administrador
-requireAdmin();
+exigirAdmin();
 
 // Incluir cabeçalho
 include '../../includes/header.php';

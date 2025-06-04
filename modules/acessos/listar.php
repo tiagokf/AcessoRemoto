@@ -7,7 +7,7 @@ require_once '../../config/config.php';
 require_once '../../config/database.php';
 
 // Verificar se o usuário está logado
-requireLogin();
+exigirLogin();
 
 // Processar exclusão de acesso, se aplicável
 if (isset($_GET['excluir']) && is_numeric($_GET['excluir'])) {
@@ -56,7 +56,7 @@ if (!empty($usuario)) {
 }
 
 // Se não for admin, mostrar apenas os acessos do próprio usuário
-if (!isAdmin()) {
+if (!ehAdmin()) {
     $id_usuario = $_SESSION['user_id'];
     $whereClause .= " AND a.id_usuario = $id_usuario";
 }
@@ -85,7 +85,7 @@ $totalPaginas = ceil($totalRegistros / $limite);
 
 // Obter lista de usuários para o filtro (apenas para admins)
 $usuarios = [];
-if (isAdmin()) {
+if (ehAdmin()) {
     $sql = "SELECT id, nome FROM usuarios ORDER BY nome";
     $result = dbQuery($sql);
     $usuarios = dbFetchAll($result);
@@ -125,7 +125,7 @@ if (isAdmin()) {
                     <label>Cliente</label>
                     <input type="text" name="cliente" placeholder="Nome do cliente" value="<?php echo htmlspecialchars($cliente); ?>">
                 </div>
-                <?php if (isAdmin()): ?>
+                <?php if (ehAdmin()): ?>
                 <div class="field">
                     <label>Usuário</label>
                     <select class="ui dropdown" name="usuario">
@@ -158,7 +158,7 @@ if (isAdmin()) {
                 <th>Data/Hora</th>
                 <th>Cliente</th>
                 <th>Tipo de Acesso</th>
-                <?php if (isAdmin()): ?>
+                <?php if (ehAdmin()): ?>
                 <th>Usuário</th>
                 <?php endif; ?>
                 <th>IP</th>
@@ -172,7 +172,7 @@ if (isAdmin()) {
                         <td><?php echo date('d/m/Y H:i:s', strtotime($acesso['data_acesso'])); ?></td>
                         <td><?php echo htmlspecialchars($acesso['cliente']); ?></td>
                         <td><?php echo htmlspecialchars($acesso['tipo_acesso_remoto']); ?></td>
-                        <?php if (isAdmin()): ?>
+                        <?php if (ehAdmin()): ?>
                         <td><?php echo htmlspecialchars($acesso['usuario_nome']); ?></td>
                         <?php endif; ?>
                         <td><?php echo htmlspecialchars($acesso['ip_acesso']); ?></td>
@@ -185,7 +185,7 @@ if (isAdmin()) {
                 <?php endforeach; ?>
             <?php else: ?>
                 <tr>
-                    <td colspan="<?php echo isAdmin() ? '6' : '5'; ?>" class="center aligned">
+                    <td colspan="<?php echo ehAdmin() ? '6' : '5'; ?>" class="center aligned">
                         Nenhum acesso encontrado com os filtros selecionados
                     </td>
                 </tr>
@@ -193,7 +193,7 @@ if (isAdmin()) {
         </tbody>
         <tfoot>
             <tr>
-                <th colspan="<?php echo isAdmin() ? '6' : '5'; ?>">
+                <th colspan="<?php echo ehAdmin() ? '6' : '5'; ?>">
                     <?php if ($totalPaginas > 1): ?>
                         <div class="ui right floated pagination menu">
                             <?php if ($pagina > 1): ?>

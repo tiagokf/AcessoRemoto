@@ -7,7 +7,7 @@ require_once '../../config/config.php';
 require_once '../../config/database.php';
 
 // Verificar se o usuário está logado
-requireLogin();
+exigirLogin();
 
 // Processar exclusão de conexão, se aplicável
 if (isset($_GET['excluir']) && is_numeric($_GET['excluir'])) {
@@ -34,42 +34,53 @@ if (isset($_GET['excluir']) && is_numeric($_GET['excluir'])) {
 
 // Processar exclusão em lote
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'excluir_lote') {
-    if (isset($_POST['conexoes']) && is_array($_POST['conexoes']) && count($_POST['conexoes']) > 0) {
-        $idsExcluir = array_map('intval', $_POST['conexoes']);
-        $idsString = implode(',', $idsExcluir);
+    if (!validateCsrfToken($_POST['csrf_token'] ?? '')) {
+        showAlert('Falha na validação de segurança (CSRF). A ação foi bloqueada.', 'negative');
+    } elseif (isset($_POST['conexoes']) && is_array($_POST['conexoes']) && count($_POST['conexoes']) > 0) {
+        $idsSelecionados = array_map('intval', $_POST['conexoes']);
+        $idsString = implode(',', $idsSelecionados);
         
-        // Verificar se alguma conexão selecionada tem acessos vinculados
-        $result = dbQuery("SELECT c.id, COUNT(a.id) as total_acessos 
-                         FROM conexoes c 
-                         LEFT JOIN acessos a ON c.id = a.id_conexao 
-                         WHERE c.id IN ($idsString) 
-                         GROUP BY c.id 
-                         HAVING total_acessos > 0");
+        // Verificar quais conexões selecionadas têm acessos vinculados
+        $resultAcessos = dbQuery("SELECT c.id FROM conexoes c JOIN acessos a ON c.id = a.id_conexao WHERE c.id IN ($idsString) GROUP BY c.id");
         
         $conexoesComAcessos = array();
-        while ($row = dbFetchAssoc($result)) {
+        while ($row = dbFetchAssoc($resultAcessos)) {
             $conexoesComAcessos[] = $row['id'];
         }
         
+        $idsExcluir = array_diff($idsSelecionados, $conexoesComAcessos);
+
         if (count($conexoesComAcessos) > 0) {
-            // Algumas conexões têm acessos vinculados
-            $idsComAcessos = implode(', ', $conexoesComAcessos);
-            showAlert("Não é possível excluir as conexões com IDs: $idsComAcessos pois existem acessos vinculados a elas.", 'negative');
-            
-            // Filtrar os IDs que podem ser excluídos
-            $idsExcluir = array_diff($idsExcluir, $conexoesComAcessos);
+            $idsComAcessosStr = implode(', ', $conexoesComAcessos);
+            showAlert("As conexões com IDs: {$idsComAcessosStr} não puderam ser excluídas pois possuem acessos vinculados.", 'warning');
         }
-        
+
         if (count($idsExcluir) > 0) {
-            // Excluir as conexões restantes
-            $idsString = implode(',', $idsExcluir);
-            $result = dbQuery("DELETE FROM conexoes WHERE id IN ($idsString)");
+            $idsParaExcluirStr = implode(',', $idsExcluir);
+            $resultExclusao = dbQuery("DELETE FROM conexoes WHERE id IN ($idsParaExcluirStr)");
             
-            if ($result) {
-                showAlert("Conexão(ões) excluída(s) com sucesso!", 'positive');
-            } else {
-                showAlert("Erro ao excluir conexão(ões).", 'negative');
+            // Idealmente, $numExcluidos = $conn->affected_rows; (se $conn fosse o objeto mysqli)
+            // Como dbQuery não retorna $conn, vamos usar count($idsExcluir) por enquanto.
+            $numExcluidos = count($idsExcluir);
+
+            if ($resultExclusao && $numExcluidos > 0) {
+                $plural = $numExcluidos > 1 ? 's' : '';
+                $idsExcluidosStr = implode(', ', $idsExcluir);
+                showAlert("Conexão(ões) com ID(s): {$idsExcluidosStr} excluída{$plural} com sucesso!", 'positive');
+            } elseif ($resultExclusao && $numExcluidos == 0 && empty($conexoesComAcessos)) {
+                 // Nenhum ID para excluir, mas nenhum erro e nenhuma conexão com acesso.
+                 // Isso pode acontecer se os IDs selecionados não existirem mais por algum motivo.
+                 showAlert("Nenhuma conexão válida foi encontrada para exclusão.", 'info');
+            } elseif (!$resultExclusao) {
+                showAlert("Erro ao tentar excluir conexão(ões) com ID(s): " . implode(', ', $idsExcluir) . ".", 'negative');
             }
+        } elseif (empty($conexoesComAcessos)) {
+            // Nenhuma conexão foi selecionada ou as selecionadas não tinham acessos E não foram excluídas (caso estranho)
+            // A lógica original já tinha showAlert('Nenhuma conexão selecionada para exclusão.', 'warning');
+            // Vamos manter um aviso se $idsSelecionados estava vazio.
+             if (empty($idsSelecionados)){
+                showAlert('Nenhuma conexão selecionada para exclusão.', 'warning');
+             }
         }
     } else {
         showAlert('Nenhuma conexão selecionada para exclusão.', 'warning');
@@ -77,7 +88,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     
     // Redirecionar de volta para a URL atual
     $currentUrl = $_SERVER['REQUEST_URI'];
-    header("Location: $currentUrl");
+    // Limpar quaisquer parâmetros GET para evitar reprocessamento ou mensagens duplicadas no refresh
+    $redirectUrl = strtok($currentUrl, '?');
+    header("Location: $redirectUrl");
     exit;
 }
 
@@ -96,11 +109,11 @@ $filtro_observacoes = isset($_GET['filtro_observacoes']) ? dbEscape($_GET['filtr
 $filtro_data_inicio = isset($_GET['filtro_data_inicio']) ? dbEscape($_GET['filtro_data_inicio']) : '';
 $filtro_data_fim = isset($_GET['filtro_data_fim']) ? dbEscape($_GET['filtro_data_fim']) : '';
 $filtro_sem_acesso = isset($_GET['filtro_sem_acesso']) ? true : false;
-$filtro_ordem = isset($_GET['filtro_ordem']) ? dbEscape($_GET['filtro_ordem']) : 'cliente_asc';
 
 // Parâmetros de ordenação
-$orderBy = isset($_GET['orderBy']) ? dbEscape($_GET['orderBy']) : 'cliente';
-$orderDir = isset($_GET['orderDir']) ? (strtolower(dbEscape($_GET['orderDir'])) === 'desc' ? 'desc' : 'asc') : 'asc';
+$allowedOrderBy = ['id', 'cliente', 'tipo_acesso_remoto', 'id_acesso_remoto']; // Colunas diretas de 'conexoes'
+$orderBy = isset($_GET['orderBy']) && in_array($_GET['orderBy'], $allowedOrderBy) ? $_GET['orderBy'] : 'cliente';
+$orderDir = isset($_GET['orderDir']) && strtolower(dbEscape($_GET['orderDir'])) === 'desc' ? 'DESC' : 'ASC';
 
 $pagina = isset($_GET['pagina']) ? intval($_GET['pagina']) : 1;
 $limite = isset($_GET['limite']) ? intval($_GET['limite']) : 10;
@@ -155,7 +168,7 @@ if (!empty($filtro_data_inicio) || !empty($filtro_data_fim) || $filtro_sem_acess
     $acessosSubquery = "SELECT id_conexao, MAX(data_acesso) as ultimo_acesso FROM acessos GROUP BY id_conexao";
     
     if ($filtro_sem_acesso) {
-        $conditions[] = "c.id NOT IN (SELECT id_conexao FROM acessos)";
+        $conditions[] = "NOT EXISTS (SELECT 1 FROM acessos a WHERE a.id_conexao = c.id)";
     } else {
         if (!empty($filtro_data_inicio)) {
             $date_inicio = date('Y-m-d', strtotime($filtro_data_inicio));
@@ -180,39 +193,9 @@ if (count($conditions) > 0) {
 }
 
 // Definir ordem
-$orderClause = 'ORDER BY cliente ASC';
-
-// Usar parâmetros de ordenação
-if ($orderBy && in_array($orderBy, ['cliente', 'tipo_acesso_remoto', 'id_acesso_remoto', 'data_ultimo_acesso'])) {
-    $orderClause = "ORDER BY $orderBy " . strtoupper($orderDir);
-} else {
-    // Manter compatibilidade com sistema de ordenação anterior
-    switch ($filtro_ordem) {
-        case 'cliente_desc':
-            $orderClause = 'ORDER BY cliente DESC';
-            break;
-        case 'tipo_asc':
-            $orderClause = 'ORDER BY tipo_acesso_remoto ASC';
-            break;
-        case 'tipo_desc':
-            $orderClause = 'ORDER BY tipo_acesso_remoto DESC';
-            break;
-        case 'id_asc':
-            $orderClause = 'ORDER BY id ASC';
-            break;
-        case 'id_desc':
-            $orderClause = 'ORDER BY id DESC';
-            break;
-        case 'recente':
-            $orderClause = 'ORDER BY id DESC';
-            break;
-        case 'antigo':
-            $orderClause = 'ORDER BY id ASC';
-            break;
-        default:
-            $orderClause = 'ORDER BY cliente ASC';
-    }
-}
+// $orderBy e $orderDir são validados e definidos acima.
+// O alias 'c.' é adicionado para especificar que a ordenação é na tabela de conexões.
+$orderClause = "ORDER BY c.{$orderBy} {$orderDir}";
 
 // Para usar a subconsulta com o último acesso, precisamos do alias para a tabela principal
 $sql = "SELECT c.* FROM conexoes c $whereClause $orderClause LIMIT $limite OFFSET $offset";
@@ -441,19 +424,11 @@ while ($row = dbFetchAssoc($resultClientes)) {
                     <div class="ui segment">
                         <h4 class="ui dividing header">Ordenação e Exibição</h4>
                         <div class="fields">
+                            <!-- O campo de ordenação legado "filtro_ordem" foi removido.
+                                 A ordenação agora é controlada pelos cabeçalhos da tabela (gerarUrlOrdenacao)
+                                 e pelos parâmetros GET orderBy e orderDir.
+                            -->
                             <div class="eight wide field">
-                                <label>Ordenar por</label>
-                                <select name="filtro_ordem" class="ui dropdown">
-                                    <option value="cliente_asc" <?php echo $filtro_ordem == 'cliente_asc' ? 'selected' : ''; ?>>Cliente (A-Z)</option>
-                                    <option value="cliente_desc" <?php echo $filtro_ordem == 'cliente_desc' ? 'selected' : ''; ?>>Cliente (Z-A)</option>
-                                    <option value="tipo_asc" <?php echo $filtro_ordem == 'tipo_asc' ? 'selected' : ''; ?>>Tipo (A-Z)</option>
-                                    <option value="tipo_desc" <?php echo $filtro_ordem == 'tipo_desc' ? 'selected' : ''; ?>>Tipo (Z-A)</option>
-                                    <option value="recente" <?php echo $filtro_ordem == 'recente' ? 'selected' : ''; ?>>Mais recentes primeiro</option>
-                                    <option value="antigo" <?php echo $filtro_ordem == 'antigo' ? 'selected' : ''; ?>>Mais antigos primeiro</option>
-                                </select>
-                            </div>
-                            
-                            <div class="four wide field">
                                 <label>Itens por página</label>
                                 <select name="limite" class="ui dropdown">
                                     <option value="10" <?php echo $limite == 10 ? 'selected' : ''; ?>>10 itens</option>
@@ -463,7 +438,7 @@ while ($row = dbFetchAssoc($resultClientes)) {
                                 </select>
                             </div>
                             
-                            <div class="four wide field">
+                            <div class="eight wide field">
                                 <label>Observações</label>
                                 <input type="text" name="filtro_observacoes" placeholder="Pesquisar em observações" 
                                        value="<?php echo htmlspecialchars($filtro_observacoes ?? ''); ?>">
@@ -519,6 +494,7 @@ while ($row = dbFetchAssoc($resultClientes)) {
     <!-- Formulário para exclusão em lote -->
     <form id="form-exclusao-lote" method="POST" action="">
         <input type="hidden" name="action" value="excluir_lote">
+        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(getCsrfToken()); ?>">
         <!-- Os checkboxes serão adicionados dinamicamente aqui -->
 
         <!-- Tabela de conexões -->
@@ -801,6 +777,7 @@ while ($row = dbFetchAssoc($resultClientes)) {
     <div class="content">
         <form class="ui form" id="form-conexao">
             <input type="hidden" name="id" id="conexao-id">
+            <input type="hidden" name="csrf_token" id="csrf_token_modal_conexao" value="<?php echo htmlspecialchars(getCsrfToken()); ?>">
             <div class="field">
                 <label>Cliente</label>
                 <input type="text" name="cliente" id="conexao-cliente" placeholder="Nome do cliente" required>

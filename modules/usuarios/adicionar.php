@@ -7,7 +7,7 @@ require_once '../../config/config.php';
 require_once '../../config/database.php';
 
 // Verificar se o usuário é administrador
-requireAdmin();
+exigirAdmin();
 
 // Incluir cabeçalho
 include '../../includes/header.php';
@@ -17,9 +17,12 @@ include '../../includes/sidebar.php';
 
 // Processar o formulário, se enviado
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    // Obter dados do formulário
-    $nome = isset($_POST['nome']) ? dbEscape($_POST['nome']) : '';
-    $email = isset($_POST['email']) ? dbEscape($_POST['email']) : '';
+    if (!validateCsrfToken($_POST['csrf_token'] ?? '')) {
+        showAlert('Falha na validação de segurança. Por favor, tente novamente.', 'negative');
+    } else {
+        // Obter dados do formulário
+        $nome = isset($_POST['nome']) ? dbEscape($_POST['nome']) : '';
+        $email = isset($_POST['email']) ? dbEscape($_POST['email']) : '';
     $senha = isset($_POST['senha']) ? $_POST['senha'] : '';
     $confirmar_senha = isset($_POST['confirmar_senha']) ? $_POST['confirmar_senha'] : '';
     $nivel_acesso = isset($_POST['nivel_acesso']) ? dbEscape($_POST['nivel_acesso']) : 'usuario';

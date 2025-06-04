@@ -7,7 +7,7 @@ require_once '../../config/config.php';
 require_once '../../config/database.php';
 
 // Verificar se o usuário está logado
-requireLogin();
+exigirLogin();
 
 // Configurar cabeçalhos para download de CSV
 header('Content-Type: text/csv; charset=utf-8');

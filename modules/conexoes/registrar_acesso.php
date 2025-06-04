@@ -7,7 +7,7 @@ require_once '../../config/config.php';
 require_once '../../config/database.php';
 
 // Verificar se o usuário está logado
-if (!isLoggedIn()) {
+if (!estaLogado()) {
     header('Content-Type: application/json');
     echo json_encode(['success' => false, 'message' => 'Não autorizado']);
     exit;
